@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1a1a2e">
     <link href="//fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* -------- Original styles from dispatch.html (unaltered) -------- */
+        /* -------- Original styles from dispatch.html -------- */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -285,7 +285,7 @@
             font-size: 14px;
         }
 
-        /* -------- Header (exact copy from dispatch.html) -------- */
+        /* -------- Header -------- */
         header {
             background: #0f0f18;
             padding: 12px 20px;
@@ -440,7 +440,6 @@
             color: var(--muted);
             margin-left: 2px;
         }
-        /* Drag-over highlight for driver badges */
         .driver-badge.drag-over {
             border-color: var(--accent) !important;
             box-shadow: 0 0 20px rgba(247, 201, 72, 0.8), inset 0 0 20px rgba(247, 201, 72, 0.2) !important;
@@ -456,7 +455,6 @@
             padding: 16px;
             transition: box-shadow 0.3s, border-color 0.3s;
         }
-        /* Dispatch mode glow */
         .manifest-panel.dispatch-mode-glow {
             border-color: var(--accent) !important;
             box-shadow: 0 0 30px rgba(247, 201, 72, 0.4), inset 0 0 30px rgba(247, 201, 72, 0.05) !important;
@@ -631,7 +629,6 @@
             font-weight: 600;
             margin-left: 4px;
         }
-
         .stop-item.greyed-out {
             background: #2a2a3a !important;
             opacity: 0.5;
@@ -645,7 +642,6 @@
             opacity: 0.3;
             pointer-events: none;
         }
-
         .stop-item.highlight-unassigned {
             border-color: var(--accent) !important;
             box-shadow: 0 0 12px rgba(247, 201, 72, 0.6) !important;
@@ -664,7 +660,7 @@
             }
         }
 
-        /* ===== GLOBAL TOOLTIP ===== */
+        /* Global Tooltip */
         #globalTooltip {
             display: none;
             position: fixed;
@@ -707,11 +703,6 @@
             font-weight: 500;
         }
 
-        .stop-item .stop-tooltip {
-            display: none !important;
-        }
-
-        /* ===== MANIFEST SEARCH ===== */
         .manifest-search {
             display: flex;
             gap: 8px;
@@ -984,13 +975,6 @@
             z-index: 9999;
         }
 
-        .header-actions-stack {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 4px;
-        }
-
         .stop-item.map-highlight {
             box-shadow: 0 0 0 3px var(--accent);
         }
@@ -1050,10 +1034,6 @@
                 margin-left: 0;
                 flex-wrap: wrap;
                 gap: 6px;
-            }
-            .header-actions-stack {
-                flex-direction: row;
-                align-items: center;
             }
             .stop-item .info .addr {
                 display: none;
@@ -1250,12 +1230,6 @@
             border-color: #ddd;
         }
 
-        .header-actions-stack {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 4px;
-        }
         .gear-btn {
             background: var(--card2);
             border: 1px solid var(--border);
@@ -1515,7 +1489,7 @@
             border-bottom-color: #ddd;
         }
 
-        /* Drag ghost style */
+        /* Drag ghost */
         .stop-item.dragging {
             opacity: 0.4;
             transform: scale(0.95);
@@ -1528,7 +1502,7 @@
             z-index: 9999;
         }
 
-        /* -------- New styles for dispatched state and dispatch modal -------- */
+        /* Dispatch styles */
         .stop-item.dispatched {
             border-left-color: #3b82f6;
             background: rgba(59,130,246,0.06);
@@ -1677,7 +1651,6 @@
 
     <!-- Main App -->
     <div id="app" style="display:none;">
-        <!-- Header – exact replica of dispatch.html -->
         <header>
             <div class="logo">
                 <img src="icon2.png" onclick="toggleTheme()" style="height:32px; width:auto; cursor:pointer;" alt="Logo" />
@@ -1718,7 +1691,6 @@
                     </div>
                 </div>
 
-                <!-- Search bar -->
                 <div class="manifest-search">
                     <input type="text" id="manifestSearchInput" placeholder="Search by name or address..." oninput="filterStops()">
                     <button class="clear-search" id="manifestSearchClear" onclick="clearSearch()">✕</button>
@@ -2433,23 +2405,19 @@
             dispatchStopId = stopId;
             document.getElementById('dispatchDriverName').textContent = driver.name || 'Driver';
 
-            // Show driver status
             const devId = driver.deviceId ? parseInt(String(driver.deviceId).trim(), 10) : null;
             const status = getGPSStatus(driver.lastLocation?.updatedAt, devId);
             const statusBadge = document.getElementById('dispatchDriverStatus');
             statusBadge.textContent = status.label;
             statusBadge.className = 'driver-status-badge ' + status.status;
 
-            // Phone input
             const phoneInput = document.getElementById('dispatchPhone');
             phoneInput.value = driver.phone;
 
-            // Message preview
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
             document.getElementById('dispatchMessagePreview').textContent = message;
 
-            // Show modal
             document.getElementById('dispatchModal').style.display = 'flex';
         }
 
@@ -2458,6 +2426,7 @@
             dispatchStopId = null;
         }
 
+        // ===== IMPROVED openMessagesAndDispatch =====
         function openMessagesAndDispatch() {
             if (!dispatchStopId) return;
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2467,29 +2436,38 @@
             if (!driverId || !drivers[driverId]) return;
             const driver = drivers[driverId];
 
-            // Get phone from input (may be overridden)
-            const phone = document.getElementById('dispatchPhone').value.trim();
+            let phone = document.getElementById('dispatchPhone').value.trim();
             if (!phone) {
                 alert('Please enter a phone number.');
                 return;
             }
 
-            // Save phone back to driver (if changed)
-            if (driver.phone !== phone) {
-                getDriversRef().child(driverId).update({ phone: phone });
-                driver.phone = phone; // update local cache
+            // Ensure phone has a '+' prefix (assume North America if missing)
+            if (!phone.startsWith('+')) {
+                // If it's a 10-digit number, add +1 (US/Canada); otherwise just add '+'
+                if (/^\d{10}$/.test(phone)) {
+                    phone = '+1' + phone;
+                } else {
+                    phone = '+' + phone;
+                }
+                document.getElementById('dispatchPhone').value = phone;
             }
 
-            // Build message
+            // Save phone back to driver if changed
+            if (driver.phone !== phone) {
+                getDriversRef().child(driverId).update({ phone: phone });
+                driver.phone = phone;
+            }
+
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
             const encoded = encodeURIComponent(message);
-
-            // Open Google Messages
             const url = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}&text=${encoded}`;
-            window.open(url, '_blank');
 
-            // Mark as dispatched
+            // Try to open Google Messages
+            const newWindow = window.open(url, '_blank');
+
+            // Mark as dispatched regardless of popup success
             const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
             ref.child(dispatchStopId).update({
                 isDispatched: true,
@@ -2500,6 +2478,35 @@
                 console.error('Failed to mark dispatched:', err);
                 alert('Error marking stop as dispatched. Please try again.');
             });
+
+            // If popup was blocked, show fallback
+            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                // Copy message to clipboard as backup
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(message).then(() => {
+                        alert('⚠️ Popup was blocked. The message has been copied to your clipboard. Please open Google Messages manually and paste it.');
+                    }).catch(() => {
+                        alert('⚠️ Popup blocked. Please open Google Messages, start a new conversation with ' + phone + ', and paste:\n\n' + message);
+                    });
+                } else {
+                    alert('⚠️ Popup blocked. Please open Google Messages, start a new conversation with ' + phone + ', and paste:\n\n' + message);
+                }
+            } else {
+                // Popup opened successfully – show a brief notification
+                const notif = document.createElement('div');
+                notif.textContent = '✅ Message opened in new tab. If not, allow popups for this site.';
+                notif.style.cssText = `
+                    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                    background: var(--accent); color: #0b0b14; padding: 12px 24px;
+                    border-radius: 30px; font-weight: 600; z-index: 99999;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: opacity 0.3s;
+                `;
+                document.body.appendChild(notif);
+                setTimeout(() => {
+                    notif.style.opacity = '0';
+                    setTimeout(() => notif.remove(), 300);
+                }, 4000);
+            }
         }
 
         // ===== INIT =====
@@ -2842,7 +2849,6 @@
             }
             driverPulseCircles = {};
 
-            // Drivers
             for (let [id, drv] of Object.entries(drivers)) {
                 if (!drv.lastLocation) continue;
                 const pos = drv.lastLocation;
@@ -2878,7 +2884,6 @@
                 if (pulseAnimationId) cancelAnimationFrame(pulseAnimationId);
             }
 
-            // Stops
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
             const entries = Object.entries(allStops)
                 .filter(([id, s]) => s.lat && s.lng)
@@ -3307,7 +3312,6 @@
                     }
                 }
 
-                // Dispatched state
                 if (isDispatched && !isCompleted) {
                     extraClasses += ' dispatched';
                 }
@@ -3323,7 +3327,6 @@
 
                 const driverName = s.assignedDriver && drivers[s.assignedDriver] ? drivers[s.assignedDriver].name : '';
 
-                // Dispatch button: show only if not completed, not dispatched, assigned, and driver has phone
                 let dispatchBtnHtml = '';
                 if (!isCompleted && !isDispatched && isAssigned && driverPhone && driverPhone.trim() !== '') {
                     dispatchBtnHtml =
@@ -3361,7 +3364,6 @@
             }
             container.innerHTML = html;
 
-            // Drag events
             container.querySelectorAll('.stop-item').forEach(item => {
                 item.addEventListener('dragstart', function(e) {
                     const stopId = this.dataset.stopId;
@@ -3518,7 +3520,6 @@
                 if (status === 'OK' && results && results.length > 0) {
                     const lat = results[0].geometry.location.lat();
                     const lng = results[0].geometry.location.lng();
-                    // Generate unique short code
                     const shortCode = await getUniqueShortCode();
                     ref.push({
                         name,
@@ -3733,7 +3734,7 @@
             closeSettings();
         }
 
-        // Expose functions to global scope for onclick
+        // Expose to global scope
         window.toggleTheme = toggleTheme;
         window.login = login;
         window.toggleMapVisibility = toggleMapVisibility;
