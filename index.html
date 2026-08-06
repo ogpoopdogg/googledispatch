@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1a1a2e">
     <link href="//fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* -------- Original styles from dispatch.html -------- */
+        /* -------- (Full CSS from previous version – unchanged) -------- */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -47,7 +47,6 @@
             border-radius: 6px;
         }
 
-        /* Light mode */
         body.light-mode {
             --bg: #f3f4f6;
             --card: #ffffff;
@@ -1754,7 +1753,7 @@
             </div>
             <div class="modal-actions">
                 <button class="close-modal-btn" onclick="closeDispatchModal()">Cancel</button>
-                <button class="open-msg-btn" id="openMessagesBtn" onclick="openMessagesAndDispatch()">Open Messages</button>
+                <button class="open-msg-btn" id="openMessagesBtn" onclick="openMessagesAndDispatch()">Open SMS</button>
             </div>
         </div>
     </div>
@@ -2426,7 +2425,7 @@
             dispatchStopId = null;
         }
 
-        // ===== IMPROVED openMessagesAndDispatch =====
+        // ===== IMPROVED openMessagesAndDispatch (using SMS URI) =====
         function openMessagesAndDispatch() {
             if (!dispatchStopId) return;
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2444,7 +2443,6 @@
 
             // Ensure phone has a '+' prefix (assume North America if missing)
             if (!phone.startsWith('+')) {
-                // If it's a 10-digit number, add +1 (US/Canada); otherwise just add '+'
                 if (/^\d{10}$/.test(phone)) {
                     phone = '+1' + phone;
                 } else {
@@ -2462,10 +2460,12 @@
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
             const encoded = encodeURIComponent(message);
-            const url = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}&text=${encoded}`;
 
-            // Try to open Google Messages
-            const newWindow = window.open(url, '_blank');
+            // Build SMS URI – this will pre‑fill the recipient and body
+            const smsLink = `sms:${phone}?body=${encoded}`;
+
+            // Open the SMS link in a new tab/window
+            const newWindow = window.open(smsLink, '_blank');
 
             // Mark as dispatched regardless of popup success
             const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
@@ -2479,22 +2479,21 @@
                 alert('Error marking stop as dispatched. Please try again.');
             });
 
-            // If popup was blocked, show fallback
+            // If the SMS link couldn't be opened (e.g., blocked by browser or no default SMS app), fallback to clipboard
             if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                // Copy message to clipboard as backup
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(message).then(() => {
-                        alert('⚠️ Popup was blocked. The message has been copied to your clipboard. Please open Google Messages manually and paste it.');
+                        alert('⚠️ Could not open SMS app. The message has been copied to your clipboard. Please paste it into your SMS app.');
                     }).catch(() => {
-                        alert('⚠️ Popup blocked. Please open Google Messages, start a new conversation with ' + phone + ', and paste:\n\n' + message);
+                        alert('⚠️ Could not open SMS app. Please copy this message manually:\n\n' + message);
                     });
                 } else {
-                    alert('⚠️ Popup blocked. Please open Google Messages, start a new conversation with ' + phone + ', and paste:\n\n' + message);
+                    alert('⚠️ Could not open SMS app. Please copy this message manually:\n\n' + message);
                 }
             } else {
-                // Popup opened successfully – show a brief notification
+                // Successfully opened
                 const notif = document.createElement('div');
-                notif.textContent = '✅ Message opened in new tab. If not, allow popups for this site.';
+                notif.textContent = '✅ SMS app opened with pre‑filled message. If not, allow popups for this site.';
                 notif.style.cssText = `
                     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
                     background: var(--accent); color: #0b0b14; padding: 12px 24px;
