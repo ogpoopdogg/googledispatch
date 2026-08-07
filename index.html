@@ -2443,7 +2443,7 @@
             }, 6000);
         }
 
-        // ===== Improved openMessagesAndDispatch (opens native app via hidden iframe) =====
+        // ===== openMessagesAndDispatch (uses messages.google.com web version) =====
         function openMessagesAndDispatch() {
             if (!dispatchStopId) return;
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2477,22 +2477,15 @@
 
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
-            const encoded = encodeURIComponent(message);
 
-            // Create hidden iframe to trigger the SMS protocol (opens native app)
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = `sms:${phone}?body=${encoded}`;
-            document.body.appendChild(iframe);
-            // Clean up after a short delay
-            setTimeout(() => {
-                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-            }, 3000);
+            // Open Google Messages web with recipient pre-filled
+            const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}`;
+            window.open(composeUrl, '_blank');
 
-            // Copy message to clipboard for manual pasting if needed
+            // Copy message to clipboard for pasting
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(message).then(() => {
-                    showNotification('📋 Message copied to clipboard. If the app does not open, paste it manually.');
+                    showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
                 }).catch(() => {
                     showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
                 });
