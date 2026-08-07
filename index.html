@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#1a1a2e">
     <link href="//fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* -------- (Full CSS from previous version – unchanged) -------- */
+        /* -------- (Full CSS – identical to original) -------- */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -2443,7 +2443,7 @@
             }, 6000);
         }
 
-        // ===== Improved openMessagesAndDispatch =====
+        // ===== Improved openMessagesAndDispatch (opens native app via hidden iframe) =====
         function openMessagesAndDispatch() {
             if (!dispatchStopId) return;
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2477,15 +2477,22 @@
 
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
+            const encoded = encodeURIComponent(message);
 
-            // Open Google Messages web with recipient pre-filled
-            const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}`;
-            window.open(composeUrl, '_blank');
+            // Create hidden iframe to trigger the SMS protocol (opens native app)
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = `sms:${phone}?body=${encoded}`;
+            document.body.appendChild(iframe);
+            // Clean up after a short delay
+            setTimeout(() => {
+                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            }, 3000);
 
-            // Copy message to clipboard for pasting
+            // Copy message to clipboard for manual pasting if needed
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(message).then(() => {
-                    showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
+                    showNotification('📋 Message copied to clipboard. If the app does not open, paste it manually.');
                 }).catch(() => {
                     showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
                 });
