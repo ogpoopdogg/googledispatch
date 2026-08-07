@@ -2425,7 +2425,25 @@
             dispatchStopId = null;
         }
 
-        // ===== IMPROVED openMessagesAndDispatch (using SMS URI) =====
+        // ===== Helper notification =====
+        function showNotification(text) {
+            const notif = document.createElement('div');
+            notif.textContent = text;
+            notif.style.cssText = `
+                position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                background: var(--accent); color: #0b0b14; padding: 12px 24px;
+                border-radius: 30px; font-weight: 600; z-index: 99999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: opacity 0.3s;
+                max-width: 90%; text-align: center;
+            `;
+            document.body.appendChild(notif);
+            setTimeout(() => {
+                notif.style.opacity = '0';
+                setTimeout(() => notif.remove(), 300);
+            }, 6000);
+        }
+
+        // ===== Improved openMessagesAndDispatch =====
         function openMessagesAndDispatch() {
             if (!dispatchStopId) return;
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2459,15 +2477,23 @@
 
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
-            const encoded = encodeURIComponent(message);
 
-            // Build SMS URI – this will pre‑fill the recipient and body
-            const smsLink = `sms:${phone}?body=${encoded}`;
+            // Open Google Messages web with recipient pre-filled
+            const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}`;
+            window.open(composeUrl, '_blank');
 
-            // Open the SMS link in a new tab/window
-            const newWindow = window.open(smsLink, '_blank');
+            // Copy message to clipboard for pasting
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(message).then(() => {
+                    showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
+                }).catch(() => {
+                    showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
+                });
+            } else {
+                showNotification('⚠️ Please copy this message manually:\n' + message);
+            }
 
-            // Mark as dispatched regardless of popup success
+            // Mark as dispatched
             const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
             ref.child(dispatchStopId).update({
                 isDispatched: true,
@@ -2478,34 +2504,6 @@
                 console.error('Failed to mark dispatched:', err);
                 alert('Error marking stop as dispatched. Please try again.');
             });
-
-            // If the SMS link couldn't be opened (e.g., blocked by browser or no default SMS app), fallback to clipboard
-            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(message).then(() => {
-                        alert('⚠️ Could not open SMS app. The message has been copied to your clipboard. Please paste it into your SMS app.');
-                    }).catch(() => {
-                        alert('⚠️ Could not open SMS app. Please copy this message manually:\n\n' + message);
-                    });
-                } else {
-                    alert('⚠️ Could not open SMS app. Please copy this message manually:\n\n' + message);
-                }
-            } else {
-                // Successfully opened
-                const notif = document.createElement('div');
-                notif.textContent = '✅ SMS app opened with pre‑filled message. If not, allow popups for this site.';
-                notif.style.cssText = `
-                    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-                    background: var(--accent); color: #0b0b14; padding: 12px 24px;
-                    border-radius: 30px; font-weight: 600; z-index: 99999;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: opacity 0.3s;
-                `;
-                document.body.appendChild(notif);
-                setTimeout(() => {
-                    notif.style.opacity = '0';
-                    setTimeout(() => notif.remove(), 300);
-                }, 4000);
-            }
         }
 
         // ===== INIT =====
