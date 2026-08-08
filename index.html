@@ -1633,6 +1633,108 @@
         }
         body.light-mode .stop-item.dispatched { background: rgba(59,130,246,0.08) !important; border-left-color: #3b82f6 !important; }
         body.light-mode .stop-item.dispatched .dispatch-badge { background: #3b82f6; color:#fff; }
+
+        /* New styles for driver pills */
+        #driverPillsContainer {
+            display: none;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            width: 100%;
+            margin: 6px 0;
+        }
+        .driver-pill {
+            padding: 6px 16px;
+            border-radius: 30px;
+            border: 2px solid transparent;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+            background: var(--card2);
+            color: var(--text);
+            border-color: var(--border);
+            user-select: none;
+        }
+        .driver-pill.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 12px rgba(247, 201, 72, 0.5);
+            transform: scale(1.04);
+        }
+        .driver-pill:hover {
+            transform: scale(1.04);
+        }
+        body.light-mode .driver-pill {
+            background: #fff;
+            border-color: #ccc;
+            color: #000;
+        }
+        body.light-mode .driver-pill.selected {
+            border-color: #2563eb;
+            box-shadow: 0 0 12px rgba(37, 99, 235, 0.5);
+        }
+
+        /* Status lights */
+        .status-light {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 4px;
+            flex-shrink: 0;
+        }
+        .status-light.green {
+            background: #2ecc71;
+            box-shadow: 0 0 12px #2ecc71;
+            animation: glow-green 1.2s ease-in-out infinite alternate;
+        }
+        .status-light.red {
+            background: #e74c3c;
+            box-shadow: 0 0 12px #e74c3c;
+            animation: glow-red 1.2s ease-in-out infinite alternate;
+        }
+        @keyframes glow-green {
+            0% { opacity: 0.6; box-shadow: 0 0 6px #2ecc71; }
+            100% { opacity: 1; box-shadow: 0 0 18px #2ecc71; }
+        }
+        @keyframes glow-red {
+            0% { opacity: 0.6; box-shadow: 0 0 6px #e74c3c; }
+            100% { opacity: 1; box-shadow: 0 0 18px #e74c3c; }
+        }
+
+        /* Unassigned border glow */
+        .stop-item.unassigned-border {
+            border-color: #f39c12 !important;
+            box-shadow: 0 0 12px rgba(243, 156, 18, 0.6);
+            animation: border-glow 1.2s ease-in-out infinite alternate;
+        }
+        @keyframes border-glow {
+            0% { box-shadow: 0 0 8px rgba(243, 156, 18, 0.4); }
+            100% { box-shadow: 0 0 20px rgba(243, 156, 18, 0.9); }
+        }
+
+        /* Completed check */
+        .completed-check {
+            font-size: 20px;
+            color: #2ecc71;
+            font-weight: 800;
+            margin-left: 2px;
+        }
+        .stop-item.completed .info .name {
+            opacity: 0.5;
+        }
+        .stop-item.completed .info .addr {
+            opacity: 0.5;
+        }
+        .stop-item.completed .actions {
+            opacity: 0.5;
+        }
+        .stop-item.completed .completed-check {
+            opacity: 1;
+        }
+        .stop-item.completed .timestamp {
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -1705,6 +1807,7 @@
                     <select id="stopDriver" style="flex:0 0 auto; background:#0b0b14; border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:30px; font-size:14px; outline:none; min-width:100px;">
                         <option value="">Unassigned</option>
                     </select>
+                    <div id="driverPillsContainer"></div>
                     <button class="btn-add" onclick="addStop()">+ Add</button>
                 </div>
 
@@ -1925,6 +2028,9 @@
         let highlightDocClickListener = null;
         let dragStopId = null;
         let tooltipTimeout = null;
+
+        // New variable for driver pills
+        let selectedDriverForPill = null;
 
         // ===== SHORT CODE GENERATION =====
         function generateShortCode() {
@@ -2530,6 +2636,43 @@
             closeDispatchModal();
         }
 
+        // ===== DRIVER PILLS =====
+        function renderDriverPills() {
+            const container = document.getElementById('driverPillsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            const entries = Object.entries(drivers);
+            if (entries.length === 0) {
+                container.innerHTML = '<span style="color:var(--muted); font-size:13px;">No drivers</span>';
+                return;
+            }
+            entries.forEach(([id, drv]) => {
+                const pill = document.createElement('div');
+                pill.className = 'driver-pill';
+                if (selectedDriverForPill === id) pill.classList.add('selected');
+                pill.style.borderColor = drv.color || '#f7c948';
+                pill.style.backgroundColor = drv.color + '33';
+                pill.textContent = drv.name || 'Driver';
+                pill.dataset.driverId = id;
+                pill.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (selectedDriverForPill === id) {
+                        selectedDriverForPill = null;
+                    } else {
+                        selectedDriverForPill = id;
+                    }
+                    renderDriverPills();
+                });
+                container.appendChild(pill);
+            });
+            // ensure container is visible if dispatch active
+            if (dispatchActive) {
+                container.style.display = 'flex';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
         // ===== INIT =====
         function initApp() {
             getDriversRef().on('value', snap => {
@@ -2541,6 +2684,7 @@
                 updateGlobalUpdateTime();
                 updateStopDriverSelect();
                 updateMapDriverControl();
+                renderDriverPills();
             });
             db.ref('developer/dispatch_dashboard/stops_today').on('value', snap => {
                 stopsToday = snap.val() || {};
@@ -2620,6 +2764,11 @@
             document.querySelector('.manifest-panel').classList.add('dispatch-mode-glow');
             document.getElementById('manifestPanel').scrollIntoView({ behavior: 'smooth' });
 
+            // Show pills, hide select
+            document.getElementById('stopDriver').style.display = 'none';
+            document.getElementById('driverPillsContainer').style.display = 'flex';
+            renderDriverPills();
+
             setTimeout(() => {
                 const nameInput = document.getElementById('stopName');
                 if (nameInput) {
@@ -2640,6 +2789,10 @@
             document.querySelector('.manifest-panel').classList.remove('dispatch-mode');
             document.querySelector('.manifest-panel').classList.remove('dispatch-mode-glow');
             exitAssignmentMode(false);
+            // Hide pills, show select
+            document.getElementById('stopDriver').style.display = '';
+            document.getElementById('driverPillsContainer').style.display = 'none';
+            selectedDriverForPill = null;
         }
 
         // ===== PAJ GPS =====
@@ -3333,6 +3486,12 @@
                     }
                 }
 
+                // Always add unassigned border if not assigned and not completed
+                if (!isAssigned && !isCompleted) {
+                    extraClasses += ' unassigned-border';
+                }
+
+                // Add dispatched class (will be used for background, but we remove badge)
                 if (isDispatched && !isCompleted) {
                     extraClasses += ' dispatched';
                 }
@@ -3348,10 +3507,20 @@
 
                 const driverName = s.assignedDriver && drivers[s.assignedDriver] ? drivers[s.assignedDriver].name : '';
 
-                // Show dispatched badge if dispatched, but no dispatch button
-                let dispatchStatusHtml = '';
-                if (isDispatched && !isCompleted) {
-                    dispatchStatusHtml = `<span class="dispatch-badge">📤 Dispatched</span>`;
+                // Status light: green if dispatched, red if unassigned, nothing otherwise (assigned but not dispatched)
+                let statusLightHtml = '';
+                if (!isCompleted) {
+                    if (isDispatched) {
+                        statusLightHtml = `<span class="status-light green"></span>`;
+                    } else if (!isAssigned) {
+                        statusLightHtml = `<span class="status-light red"></span>`;
+                    }
+                }
+
+                // Completed check: larger checkmark
+                let completedCheckHtml = '';
+                if (isCompleted) {
+                    completedCheckHtml = `<span class="completed-check">✓</span>`;
                 }
 
                 html += `
@@ -3366,7 +3535,7 @@
                    data-stop-driver="${driverName}"
               >
                 <div class="info" onclick="${infoOnClick}" style="cursor:${infoCursor};">
-                  <div class="name">${s.name || 'No name'} ${ts} ${dispatchStatusHtml}</div>
+                  <div class="name">${statusLightHtml} ${s.name || 'No name'} ${ts} ${completedCheckHtml}</div>
                   <div class="addr">${s.address || ''} ${s.city || ''}</div>
                 </div>
                 <div class="actions">
@@ -3471,7 +3640,21 @@
                 }
             });
 
-            if (names.length === 0) {
+            // Get tomorrow's date formatted
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const weekday = tomorrow.toLocaleDateString('en-US', { weekday: 'long' });
+            const month = tomorrow.toLocaleDateString('en-US', { month: 'long' });
+            const day = tomorrow.getDate();
+            const daySuffix = (day % 10 === 1 && day !== 11) ? 'st' :
+                             (day % 10 === 2 && day !== 12) ? 'nd' :
+                             (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+            const dateStr = `${weekday} ${month} ${day}${daySuffix}`;
+
+            // Prepend date as first line
+            const allLines = [dateStr, ...names];
+
+            if (allLines.length === 1) { // only date, no names
                 const btn = document.querySelector('.copy-btn-header');
                 btn.textContent = '📋 No names';
                 btn.classList.add('copied');
@@ -3482,7 +3665,7 @@
                 return;
             }
 
-            const text = names.join('\n');
+            const text = allLines.join('\n');
 
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(() => {
@@ -3529,7 +3712,13 @@
             const name = document.getElementById('stopName').value.trim();
             const address = document.getElementById('stopAddress').value.trim();
             const city = document.getElementById('stopCity').value.trim();
-            const assignedDriver = document.getElementById('stopDriver').value || null;
+            // Use selected pill if dispatch active, else select value
+            let assignedDriver = null;
+            if (dispatchActive && selectedDriverForPill) {
+                assignedDriver = selectedDriverForPill;
+            } else {
+                assignedDriver = document.getElementById('stopDriver').value || null;
+            }
             if (!name || !address || !city) { alert('Fill all fields'); return; }
             const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref(
                 'developer/dispatch_dashboard/stops_tomorrow');
@@ -3569,6 +3758,9 @@
                         document.getElementById('stopName').value = '';
                         document.getElementById('stopAddress').value = '';
                         document.getElementById('stopCity').value = '';
+                        // Reset pill selection
+                        selectedDriverForPill = null;
+                        renderDriverPills();
                     });
                 } else {
                     alert('Could not geocode address: ' + status);
@@ -3600,15 +3792,19 @@
             ref.child(id).once('value').then(snap => {
                 const stop = snap.val();
                 if (!stop) return;
-                ref.child(id).update({ assignedDriver: driverId || null });
-                if (driverId && drivers[driverId] && drivers[driverId].phone) {
-                    const driver = drivers[driverId];
-                    const stopName = stop.name || 'Stop';
-                    const stopAddress = stop.address || '';
-                    const stopCity = stop.city || '';
-                    sendAssignmentSMS(driverId, driver.phone, stopName, stopAddress, stopCity, id);
-                }
-                if (activeModalDriverId) renderDriverStops(activeModalDriverId);
+                ref.child(id).update({ assignedDriver: driverId || null }).then(() => {
+                    // Fetch updated stop data to auto-dispatch
+                    if (driverId && drivers[driverId] && drivers[driverId].phone) {
+                        const driver = drivers[driverId];
+                        const stopName = stop.name || 'Stop';
+                        const stopAddress = stop.address || '';
+                        const stopCity = stop.city || '';
+                        // Prepare updated stop data for autoDispatchStop
+                        const updatedStopData = { ...stop, assignedDriver: driverId };
+                        autoDispatchStop(id, updatedStopData);
+                    }
+                    if (activeModalDriverId) renderDriverStops(activeModalDriverId);
+                });
             });
         }
 
