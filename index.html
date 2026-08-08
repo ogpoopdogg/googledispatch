@@ -2478,19 +2478,36 @@
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
 
-            // Open Google Messages web with recipient pre-filled
-            const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}`;
-            window.open(composeUrl, '_blank');
+            // Detect if the user is on Android
+            const isAndroid = /android/i.test(navigator.userAgent);
 
-            // Copy message to clipboard for pasting
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(message).then(() => {
-                    showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
-                }).catch(() => {
-                    showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
-                });
+            if (isAndroid) {
+                // --- ANDROID: Open native SMS app with number + message pre-filled ---
+                const smsUrl = `sms:${phone}?body=${encodeURIComponent(message)}`;
+                // Use window.location.href to trigger the native app
+                window.location.href = smsUrl;
+
+                // Optional: still copy to clipboard just in case the SMS app fails
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(message).catch(() => {});
+                }
+
+                // Show a brief notification
+                showNotification('📱 Google Messages opened – just tap Send!');
             } else {
-                showNotification('⚠️ Please copy this message manually:\n' + message);
+                // --- DESKTOP (or iOS / other): Open Google Messages Web + copy to clipboard ---
+                const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}`;
+                window.open(composeUrl, '_blank');
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(message).then(() => {
+                        showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
+                    }).catch(() => {
+                        showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
+                    });
+                } else {
+                    showNotification('⚠️ Please copy this message manually:\n' + message);
+                }
             }
 
             // Mark as dispatched
