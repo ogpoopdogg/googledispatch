@@ -2443,6 +2443,64 @@
             }, 6000);
         }
 
+        // ===== New function to send dispatch message =====
+        function sendDispatchMessage(phone, message, stopId) {
+            // Validate and format phone
+            let formattedPhone = phone.trim();
+            if (!formattedPhone.startsWith('+')) {
+                if (/^\d{10}$/.test(formattedPhone)) {
+                    formattedPhone = '+1' + formattedPhone;
+                } else {
+                    formattedPhone = '+' + formattedPhone;
+                }
+            }
+
+            const isAndroid = /android/i.test(navigator.userAgent);
+            if (isAndroid) {
+                const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
+                window.location.href = smsUrl;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(message).catch(() => {});
+                }
+                showNotification('📱 Google Messages opened – just tap Send!');
+            } else {
+                const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
+                window.open(composeUrl, '_blank');
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(message).then(() => {
+                        showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
+                    }).catch(() => {
+                        showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
+                    });
+                } else {
+                    showNotification('⚠️ Please copy this message manually:\n' + message);
+                }
+            }
+
+            // Mark as dispatched in Firebase
+            const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
+            ref.child(stopId).update({
+                isDispatched: true,
+                dispatchedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(err => {
+                console.error('Failed to mark dispatched:', err);
+            });
+        }
+
+        // ===== Auto dispatch on add =====
+        function autoDispatchStop(stopId, stopData) {
+            const driverId = stopData.assignedDriver;
+            if (!driverId) return; // no driver assigned, skip
+            const driver = drivers[driverId];
+            if (!driver || !driver.phone || driver.phone.trim() === '') {
+                showNotification('⚠️ Driver has no phone number, cannot dispatch.');
+                return;
+            }
+            const shortCode = stopData.shortCode || '????';
+            const message = `Pickup: ${stopData.name || 'Stop'} at ${stopData.address || ''}, ${stopData.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
+            sendDispatchMessage(driver.phone, message, stopId);
+        }
+
         // ===== openMessagesAndDispatch (uses messages.google.com web version) =====
         function openMessagesAndDispatch() {
             if (!dispatchStopId) return;
@@ -2459,16 +2517,6 @@
                 return;
             }
 
-            // Ensure phone has a '+' prefix (assume North America if missing)
-            if (!phone.startsWith('+')) {
-                if (/^\d{10}$/.test(phone)) {
-                    phone = '+1' + phone;
-                } else {
-                    phone = '+' + phone;
-                }
-                document.getElementById('dispatchPhone').value = phone;
-            }
-
             // Save phone back to driver if changed
             if (driver.phone !== phone) {
                 getDriversRef().child(driverId).update({ phone: phone });
@@ -2478,49 +2526,8 @@
             const shortCode = stop.shortCode || '????';
             const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
 
-            // Detect if the user is on Android
-            const isAndroid = /android/i.test(navigator.userAgent);
-
-            if (isAndroid) {
-                // --- ANDROID: Open native SMS app with number + message pre-filled ---
-                const smsUrl = `sms:${phone}?body=${encodeURIComponent(message)}`;
-                // Use window.location.href to trigger the native app
-                window.location.href = smsUrl;
-
-                // Optional: still copy to clipboard just in case the SMS app fails
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(message).catch(() => {});
-                }
-
-                // Show a brief notification
-                showNotification('📱 Google Messages opened – just tap Send!');
-            } else {
-                // --- DESKTOP (or iOS / other): Open Google Messages Web + copy to clipboard ---
-                const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(phone)}`;
-                window.open(composeUrl, '_blank');
-
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(message).then(() => {
-                        showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
-                    }).catch(() => {
-                        showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
-                    });
-                } else {
-                    showNotification('⚠️ Please copy this message manually:\n' + message);
-                }
-            }
-
-            // Mark as dispatched
-            const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
-            ref.child(dispatchStopId).update({
-                isDispatched: true,
-                dispatchedAt: firebase.database.ServerValue.TIMESTAMP
-            }).then(() => {
-                closeDispatchModal();
-            }).catch(err => {
-                console.error('Failed to mark dispatched:', err);
-                alert('Error marking stop as dispatched. Please try again.');
-            });
+            sendDispatchMessage(phone, message, dispatchStopId);
+            closeDispatchModal();
         }
 
         // ===== INIT =====
@@ -3341,12 +3348,10 @@
 
                 const driverName = s.assignedDriver && drivers[s.assignedDriver] ? drivers[s.assignedDriver].name : '';
 
-                let dispatchBtnHtml = '';
-                if (!isCompleted && !isDispatched && isAssigned && driverPhone && driverPhone.trim() !== '') {
-                    dispatchBtnHtml =
-                        `<button class="dispatch-btn" onclick="event.stopPropagation(); openDispatchModal('${id}')">📩 Dispatch</button>`;
-                } else if (isDispatched && !isCompleted) {
-                    dispatchBtnHtml = `<span class="dispatch-badge">📤 Dispatched</span>`;
+                // Show dispatched badge if dispatched, but no dispatch button
+                let dispatchStatusHtml = '';
+                if (isDispatched && !isCompleted) {
+                    dispatchStatusHtml = `<span class="dispatch-badge">📤 Dispatched</span>`;
                 }
 
                 html += `
@@ -3361,7 +3366,7 @@
                    data-stop-driver="${driverName}"
               >
                 <div class="info" onclick="${infoOnClick}" style="cursor:${infoCursor};">
-                  <div class="name">${s.name || 'No name'} ${ts} ${dispatchBtnHtml}</div>
+                  <div class="name">${s.name || 'No name'} ${ts} ${dispatchStatusHtml}</div>
                   <div class="addr">${s.address || ''} ${s.city || ''}</div>
                 </div>
                 <div class="actions">
@@ -3535,7 +3540,7 @@
                     const lat = results[0].geometry.location.lat();
                     const lng = results[0].geometry.location.lng();
                     const shortCode = await getUniqueShortCode();
-                    ref.push({
+                    const stopData = {
                         name,
                         address,
                         city,
@@ -3548,7 +3553,11 @@
                         shortCode,
                         isDispatched: false,
                         dispatchedAt: null
-                    }).then((newRef) => {
+                    };
+                    ref.push(stopData).then((newRef) => {
+                        const stopId = newRef.key;
+                        // Auto-dispatch if assigned to a driver with a phone
+                        autoDispatchStop(stopId, stopData);
                         const sanitizedKey = name.replace(/[.#$\[\]\/]/g, "").trim();
                         const updateObj = {
                             address: address,
