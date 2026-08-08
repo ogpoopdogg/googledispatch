@@ -1064,9 +1064,13 @@
             #globalTooltip .tooltip-addr {
                 font-size: 12px;
             }
-            /* hide desktop dispatch button on mobile, show mobile one */
-            #dispatchBtn { display: none; }
-            #dispatchBtnMobile { display: inline-block !important; }
+            /* Feature 1: mobile adjustments */
+            .desktop-only {
+                display: none !important;
+            }
+            .dispatch-btn-mobile {
+                display: inline-block !important;
+            }
         }
         .hidden {
             display: none !important;
@@ -1738,6 +1742,46 @@
         .stop-item.completed .timestamp {
             opacity: 0.7;
         }
+
+        /* Group chat chips */
+        .group-chip {
+            background: var(--card2);
+            border-radius: 30px;
+            padding: 4px 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .group-chip .remove-chip {
+            cursor: pointer;
+            font-weight: 700;
+            color: var(--muted);
+            background: none;
+            border: none;
+            font-size: 16px;
+            padding: 0 2px;
+        }
+        .group-chip .remove-chip:hover {
+            color: #e74c3c;
+        }
+
+        /* Feature 1: mobile button */
+        .desktop-only {
+            display: inline-block;
+        }
+        .dispatch-btn-mobile {
+            display: none;
+        }
+        @media (max-width: 600px) {
+            .desktop-only {
+                display: none !important;
+            }
+            .dispatch-btn-mobile {
+                display: inline-block !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1770,8 +1814,7 @@
                     <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                     Map
                 </button>
-                <button onclick="toggleDispatchMode()" id="dispatchBtn" class="dispatch-btn">Dispatch</button>
-                <button onclick="rolloverDay()" id="rolloverBtn" class="dispatch-btn" style="background: #c0392b; border-color: #c0392b; color: white;">Roll Over</button>
+                <button onclick="toggleDispatchMode()" id="dispatchBtn" class="dispatch-btn desktop-only">Dispatch</button>
             </div>
         </header>
 
@@ -1785,7 +1828,7 @@
                 <div class="panel-header">
                     <h2>Manifest <span id="dayLabel" style="font-size:14px; font-weight:400; color:var(--muted);">Today</span></h2>
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <button onclick="toggleDispatchMode()" id="dispatchBtnMobile" class="dispatch-btn" style="display:none;">Dispatch</button>
+                        <button class="dispatch-btn-mobile" onclick="toggleDispatchMode()" style="display:none;">Dispatch</button>
                         <button class="manifest-map-btn" id="manifestMapBtn" onclick="toggleMapVisibility()" title="Toggle Map">
                             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                             Map
@@ -1883,15 +1926,21 @@
                 <label>Dispatcher Personal Phone (for SMS relay)</label>
                 <input type="text" id="dispatcherPhone" placeholder="+14165556789">
             </div>
-            <div class="field">
-                <label>Group Chat ID (phone number for SMS group)</label>
-                <input type="text" id="groupChatId" placeholder="+14165551234">
-            </div>
 
             <div style="border-top:1px solid var(--border); margin:16px 0;"></div>
 
             <div id="driverSettingsList"></div>
             <button onclick="addDriverRow()" style="background:var(--card2); border:1px dashed var(--border); color:var(--text); padding:10px; border-radius:20px; width:100%; margin-top:8px; cursor:pointer;">+ Add Driver</button>
+
+            <!-- Group Chat (SMS) section -->
+            <div style="border-top:1px solid var(--border); margin:16px 0; padding-top:16px;">
+                <h3 style="font-size:14px; margin-bottom:10px;">Group Chat (SMS)</h3>
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <input type="text" id="groupChatInput" placeholder="+14165551234" style="flex:1; background:#0b0b14; border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:30px; font-size:14px; outline:none;">
+                    <button onclick="addGroupChatNumber()" style="background:var(--accent); color:#0b0b14; border:none; padding:10px 20px; border-radius:30px; font-weight:700; cursor:pointer;">+</button>
+                </div>
+                <div id="groupChatChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+            </div>
 
             <div style="border-top:1px solid var(--border); margin:16px 0; padding-top:16px;">
                 <h3 style="font-size:14px; margin-bottom:10px;">Find Your Device IDs</h3>
@@ -1989,23 +2038,6 @@
             document.getElementById('login-overlay').style.display = 'flex';
         }
 
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                const email = user.email;
-                if (!email.endsWith('@ec.com')) {
-                    alert('Access denied. Only @ec.com emails allowed.');
-                    auth.signOut();
-                    return;
-                }
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('app').style.display = 'flex';
-                initApp();
-            } else {
-                document.getElementById('login-overlay').style.display = 'flex';
-                document.getElementById('app').style.display = 'none';
-            }
-        });
-
         // ===== STATE =====
         let drivers = {};
         let stopsToday = {};
@@ -2040,6 +2072,9 @@
 
         // New variable for driver pills
         let selectedDriverForPill = null;
+
+        // Group chat numbers (comma-separated string)
+        let groupChatNumbers = '';
 
         // ===== SHORT CODE GENERATION =====
         function generateShortCode() {
@@ -2682,65 +2717,230 @@
             }
         }
 
-        // ===== ROLLOVER DAY =====
-        async function rolloverDay() {
-            if (!confirm('Are you sure you want to roll over the day? This will archive completed stops, move pending to today, and merge tomorrow\'s stops.')) return;
-            try {
-                const todayDate = new Date().toISOString().slice(0,10); // YYYY-MM-DD
-                // Fetch both
-                const todaySnap = await db.ref('developer/dispatch_dashboard/stops_today').once('value');
-                const tomorrowSnap = await db.ref('developer/dispatch_dashboard/stops_tomorrow').once('value');
-                const todayData = todaySnap.val() || {};
-                const tomorrowData = tomorrowSnap.val() || {};
+        // ===== GROUP CHAT FUNCTIONS =====
+        function renderGroupChatChips() {
+            const container = document.getElementById('groupChatChips');
+            if (!container) return;
+            const numbers = groupChatNumbers ? groupChatNumbers.split(',').filter(n => n.trim() !== '') : [];
+            if (numbers.length === 0) {
+                container.innerHTML = '<span style="color:var(--muted); font-size:13px;">No numbers added.</span>';
+                return;
+            }
+            container.innerHTML = numbers.map(num => `
+                <span class="group-chip">
+                    ${num}
+                    <span class="remove-chip" onclick="removeGroupChatNumber('${num}')">×</span>
+                </span>
+            `).join('');
+        }
 
-                // Separate completed from today
-                const completed = {};
-                const pending = {};
-                Object.entries(todayData).forEach(([id, stop]) => {
-                    if (stop.status === 'completed') {
-                        completed[id] = stop;
+        function addGroupChatNumber() {
+            const input = document.getElementById('groupChatInput');
+            const num = input.value.trim();
+            if (!num) return;
+            // Validate basic phone format (allow + and digits)
+            if (!/^\+?\d+$/.test(num)) {
+                alert('Please enter a valid phone number (e.g., +14165551234).');
+                return;
+            }
+            let numbers = groupChatNumbers ? groupChatNumbers.split(',').filter(n => n.trim() !== '') : [];
+            if (numbers.includes(num)) {
+                alert('Number already in list.');
+                return;
+            }
+            numbers.push(num);
+            groupChatNumbers = numbers.join(',');
+            renderGroupChatChips();
+            input.value = '';
+            // Also update Firebase immediately? We'll let Save do that. But we want the UI to show.
+            // Optionally we could update master_config on add, but we'll rely on Save.
+        }
+
+        function removeGroupChatNumber(num) {
+            let numbers = groupChatNumbers ? groupChatNumbers.split(',').filter(n => n.trim() !== '') : [];
+            numbers = numbers.filter(n => n !== num);
+            groupChatNumbers = numbers.join(',');
+            renderGroupChatChips();
+        }
+
+        // ===== DATE FORMATTING FOR SMS =====
+        function getTomorrowDateWithOrdinal() {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const day = d.getDate();
+            const suffix = (day % 10 === 1 && day !== 11) ? 'st' :
+                           (day % 10 === 2 && day !== 12) ? 'nd' :
+                           (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+            return `${weekdays[d.getDay()]} ${months[d.getMonth()]} ${day}${suffix}`;
+        }
+
+        // ===== COPY STOP NAMES (with SMS for mobile) =====
+        function copyStopNames() {
+            const isMobile = window.innerWidth <= 600;
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            // If mobile and we have group numbers, attempt SMS or copy
+            if (isMobile && groupChatNumbers && groupChatNumbers.trim() !== '') {
+                // Build stop list for today only (non-completed)
+                const todayStops = stopsToday || {};
+                const names = Object.values(todayStops)
+                    .filter(s => s.status !== 'completed' && s.name)
+                    .map(s => s.name.trim());
+                if (names.length === 0) {
+                    showNotification('No remaining stops for today.');
+                    return;
+                }
+                const dateHeader = getTomorrowDateWithOrdinal();
+                const bodyText = dateHeader + '\n' + names.join('\n');
+
+                if (isIOS) {
+                    // iOS: copy to clipboard and notify
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(bodyText).then(() => {
+                            showNotification('📋 Copied stop list – please paste into your group chat.');
+                        }).catch(() => {
+                            fallbackCopy(bodyText);
+                            showNotification('📋 Copied stop list – please paste into your group chat.');
+                        });
                     } else {
-                        pending[id] = stop;
+                        fallbackCopy(bodyText);
+                        showNotification('📋 Copied stop list – please paste into your group chat.');
                     }
-                });
-
-                // Archive completed
-                const archiveRef = db.ref('developer/dispatch_dashboard/stops_archive');
-                if (Object.keys(completed).length > 0) {
-                    await archiveRef.push({
-                        date: todayDate,
-                        stops: completed
-                    });
+                    return;
                 }
 
-                // Merge pending with tomorrow
-                const newToday = { ...pending, ...tomorrowData };
-                // Update today and clear tomorrow
-                const updates = {};
-                updates['developer/dispatch_dashboard/stops_today'] = newToday;
-                updates['developer/dispatch_dashboard/stops_tomorrow'] = null; // clear
+                // Android: open SMS with multiple recipients
+                const numbers = groupChatNumbers.split(',').filter(n => n.trim() !== '');
+                if (numbers.length === 0) {
+                    fallbackCopy(bodyText);
+                    showNotification('No group chat numbers found. Copied to clipboard.');
+                    return;
+                }
+                const recipients = numbers.join(',');
+                const smsUri = `sms:${recipients}?body=${encodeURIComponent(bodyText)}`;
+                window.location.href = smsUri;
+                // Also copy to clipboard as fallback
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(bodyText).catch(() => {});
+                }
+                showNotification('📱 Opening SMS with group chat...');
+                return;
+            }
 
-                await db.ref().update(updates);
+            // Fallback: original copy behaviour (both today and tomorrow, non-completed)
+            const todayStops = stopsToday || {};
+            const tomorrowStops = stopsTomorrow || {};
 
-                // Update lastDate
-                localStorage.setItem('lastDate', todayDate);
+            const names = [];
 
-                // Refresh view
-                // Reload data? We have listeners, they should update. But we might need to manually refresh.
-                // We'll just notify.
-                alert('Rollover completed successfully.');
-                // Switch to today view if not already
-                if (currentDay !== 'today') switchDay('today');
-                renderStopList();
-                updateMapMarkers();
-            } catch (e) {
-                console.error('Rollover error:', e);
-                alert('Rollover failed: ' + e.message);
+            Object.values(todayStops).forEach(s => {
+                if (s.status !== 'completed' && s.name) {
+                    names.push(s.name.trim());
+                }
+            });
+
+            Object.values(tomorrowStops).forEach(s => {
+                if (s.status !== 'completed' && s.name) {
+                    names.push(s.name.trim());
+                }
+            });
+
+            // Get tomorrow's date formatted
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const weekday = tomorrow.toLocaleDateString('en-US', { weekday: 'long' });
+            const month = tomorrow.toLocaleDateString('en-US', { month: 'long' });
+            const day = tomorrow.getDate();
+            const daySuffix = (day % 10 === 1 && day !== 11) ? 'st' :
+                             (day % 10 === 2 && day !== 12) ? 'nd' :
+                             (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
+            const dateStr = `${weekday} ${month} ${day}${daySuffix}`;
+
+            const allLines = [dateStr, ...names];
+
+            if (allLines.length === 1) { // only date, no names
+                const btn = document.querySelector('.copy-btn-header');
+                btn.textContent = 'No names';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'COPY';
+                    btn.classList.remove('copied');
+                }, 1500);
+                return;
+            }
+
+            const text = allLines.join('\n');
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = document.querySelector('.copy-btn-header');
+                    btn.textContent = '✅ Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.textContent = 'COPY';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }).catch(() => {
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
             }
         }
 
+        function fallbackCopy(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                const btn = document.querySelector('.copy-btn-header');
+                btn.textContent = '✅ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = 'COPY';
+                    btn.classList.remove('copied');
+                }, 2000);
+            } catch (e) {
+                alert('Could not copy. Please select and copy manually:\n\n' + text);
+            }
+            document.body.removeChild(textarea);
+        }
+
         // ===== INIT =====
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                const email = user.email;
+                if (!email.endsWith('@ec.com')) {
+                    alert('Access denied. Only @ec.com emails allowed.');
+                    auth.signOut();
+                    return;
+                }
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('app').style.display = 'flex';
+                initApp();
+            } else {
+                document.getElementById('login-overlay').style.display = 'flex';
+                document.getElementById('app').style.display = 'none';
+            }
+        });
+
         function initApp() {
+            // Perform rollover check before setting up listeners
+            checkAndPerformRollover().then(() => {
+                setupRealtimeListeners();
+            }).catch(() => {
+                setupRealtimeListeners();
+            });
+        }
+
+        function setupRealtimeListeners() {
             getDriversRef().on('value', snap => {
                 drivers = snap.val() || {};
                 renderDriverBadges();
@@ -2760,14 +2960,15 @@
                 stopsTomorrow = snap.val() || {};
                 if (currentDay === 'tomorrow') renderStopList();
             });
-            getMasterRef().once('value').then(snap => {
+            // Listen to master config for settings and groupChatNumbers
+            getMasterRef().on('value', snap => {
                 const cfg = snap.val() || {};
                 document.getElementById('pajEmail').value = cfg.paj_email || '';
                 document.getElementById('pajPassword').value = cfg.paj_password || '';
                 document.getElementById('dispatcherPhone').value = cfg.dispatcherPhone || '';
-                document.getElementById('groupChatId').value = cfg.groupChatId || '';
-                window.groupChatId = cfg.groupChatId || '';
+                groupChatNumbers = cfg.groupChatNumbers || '';
                 pajToken = cfg.paj_token || null;
+                renderGroupChatChips();
                 if (cfg.paj_email && cfg.paj_password) authenticatePAJ();
                 if (cfg.map_center_lat && cfg.map_center_lng && cfg.map_zoom) {
                     if (map) {
@@ -2790,14 +2991,6 @@
                         localStorage.setItem('ec_map_visible', 'false');
                     }
                 }
-                // Check for day rollover
-                const todayStr = new Date().toISOString().slice(0,10);
-                const lastDate = localStorage.getItem('lastDate');
-                if (lastDate !== todayStr) {
-                    rolloverDay().catch(e => console.error('Auto rollover failed:', e));
-                }
-            }).catch(() => {
-                getMasterRef().set({ paj_email: '', paj_password: '', paj_token: '' });
             });
             if (gpsInterval) clearInterval(gpsInterval);
             gpsInterval = setInterval(() => {
@@ -3067,6 +3260,8 @@
             const bounds = new google.maps.LatLngBounds();
             let hasPoints = false;
             Object.values(allStops).forEach(s => {
+                // Exclude completed stops from bounds
+                if (s.status === 'completed') return;
                 if (s.lat && s.lng) {
                     bounds.extend({ lat: s.lat, lng: s.lng });
                     hasPoints = true;
@@ -3139,14 +3334,28 @@
 
             entries.forEach(([id, s], index) => {
                 const pos = { lat: s.lat, lng: s.lng };
-                const labelText = `${index+1}. ${s.name || 'Stop'}`;
-                const isCompleted = s.status === 'completed';
+                let labelText = `${index+1}. ${s.name || 'Stop'}`;
+                let fillColor = '#ff9800';
+                let fillOpacity = 1;
+                let strokeColor = 'white';
+                let strokeWeight = 2;
+
+                if (s.status === 'completed') {
+                    fillColor = '#999';
+                    fillOpacity = 0.5;
+                    // Use driver's color as stroke if assigned
+                    const driverColor = s.assignedDriver && drivers[s.assignedDriver] ? drivers[s.assignedDriver].color : '#999';
+                    strokeColor = driverColor;
+                    strokeWeight = 1.5;
+                    labelText = '✓ ' + labelText;
+                }
+
                 const marker = new google.maps.Marker({
                     position: pos,
                     map: map,
                     label: {
                         text: labelText,
-                        color: isCompleted ? '#999999' : '#00b32d',
+                        color: '#00b32d',
                         fontWeight: 'bold',
                         fontSize: '11px',
                         className: 'driver-map-label'
@@ -3154,10 +3363,10 @@
                     icon: {
                         path: google.maps.SymbolPath.CIRCLE,
                         scale: 12,
-                        fillColor: isCompleted ? '#aaaaaa' : '#ff9800',
-                        fillOpacity: isCompleted ? 0.5 : 1,
-                        strokeColor: isCompleted ? '#888888' : 'white',
-                        strokeWeight: 2
+                        fillColor: fillColor,
+                        fillOpacity: fillOpacity,
+                        strokeColor: strokeColor,
+                        strokeWeight: strokeWeight
                     }
                 });
                 marker.set('stopId', id);
@@ -3696,103 +3905,6 @@
             renderStopList();
         }
 
-        // ===== COPY STOP NAMES =====
-        function copyStopNames() {
-            const todayStops = stopsToday || {};
-            const tomorrowStops = stopsTomorrow || {};
-
-            const names = [];
-
-            Object.values(todayStops).forEach(s => {
-                if (s.status !== 'completed' && s.name) {
-                    names.push(s.name.trim());
-                }
-            });
-
-            Object.values(tomorrowStops).forEach(s => {
-                if (s.status !== 'completed' && s.name) {
-                    names.push(s.name.trim());
-                }
-            });
-
-            // Get tomorrow's date formatted
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const weekday = tomorrow.toLocaleDateString('en-US', { weekday: 'long' });
-            const month = tomorrow.toLocaleDateString('en-US', { month: 'long' });
-            const day = tomorrow.getDate();
-            const daySuffix = (day % 10 === 1 && day !== 11) ? 'st' :
-                             (day % 10 === 2 && day !== 12) ? 'nd' :
-                             (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
-            const dateStr = `${weekday} ${month} ${day}${daySuffix}`;
-
-            // Prepend date as first line
-            const allLines = [dateStr, ...names];
-
-            if (allLines.length === 1) { // only date, no names
-                const btn = document.querySelector('.copy-btn-header');
-                btn.textContent = 'No names';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = 'COPY';
-                    btn.classList.remove('copied');
-                }, 1500);
-                return;
-            }
-
-            const text = allLines.join('\n');
-
-            // Copy to clipboard
-            const copySuccess = function() {
-                const btn = document.querySelector('.copy-btn-header');
-                btn.textContent = 'Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = 'COPY';
-                    btn.classList.remove('copied');
-                }, 2000);
-            };
-
-            const copyFailed = function() {
-                alert('Could not copy. Please select and copy manually:\n\n' + text);
-            };
-
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(copySuccess).catch(copyFailed);
-            } else {
-                fallbackCopy(text);
-            }
-
-            // If mobile, open Google Messages with group chat ID
-            const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-            if (isMobile && window.groupChatId) {
-                window.open(`https://messages.google.com/web/conversations/new?phone=${window.groupChatId}`, '_blank');
-            }
-        }
-
-        function fallbackCopy(text) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            textarea.style.left = '-9999px';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                const btn = document.querySelector('.copy-btn-header');
-                btn.textContent = 'Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = 'COPY';
-                    btn.classList.remove('copied');
-                }, 2000);
-            } catch (e) {
-                alert('Could not copy. Please select and copy manually:\n\n' + text);
-            }
-            document.body.removeChild(textarea);
-        }
-
         // ===== STOP ACTIONS =====
         async function addStop() {
             const name = document.getElementById('stopName').value.trim();
@@ -3965,11 +4077,10 @@
         function openSettings() {
             document.getElementById('settingsModal').style.display = 'flex';
             renderSettingsList();
+            renderGroupChatChips();
             getMasterRef().once('value').then(snap => {
                 const cfg = snap.val() || {};
                 document.getElementById('dispatcherPhone').value = cfg.dispatcherPhone || '';
-                document.getElementById('groupChatId').value = cfg.groupChatId || '';
-                window.groupChatId = cfg.groupChatId || '';
             });
         }
 
@@ -4023,9 +4134,13 @@
             const email = document.getElementById('pajEmail').value.trim();
             const pass = document.getElementById('pajPassword').value.trim();
             const dispatcherPhone = document.getElementById('dispatcherPhone').value.trim();
-            const groupChatId = document.getElementById('groupChatId').value.trim();
-            getMasterRef().update({ paj_email: email, paj_password: pass, dispatcherPhone: dispatcherPhone, groupChatId: groupChatId });
-            window.groupChatId = groupChatId;
+            // Save groupChatNumbers as well
+            getMasterRef().update({
+                paj_email: email,
+                paj_password: pass,
+                dispatcherPhone: dispatcherPhone,
+                groupChatNumbers: groupChatNumbers
+            });
             const rows = document.querySelectorAll('#driverSettingsList .driver-row');
             rows.forEach(row => {
                 const id = row.querySelector('.drv-name').dataset.id;
@@ -4041,6 +4156,67 @@
             renderDriverBadges();
             renderStopList();
             closeSettings();
+        }
+
+        // ===== ROLLOVER =====
+        async function checkAndPerformRollover() {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+            const lastDate = localStorage.getItem('lastDate');
+
+            // If lastDate is missing or today is greater, perform rollover
+            if (!lastDate || todayStr > lastDate) {
+                console.log('🔄 Rollover needed. lastDate:', lastDate, 'today:', todayStr);
+                try {
+                    // Fetch both stops nodes
+                    const todaySnap = await db.ref('developer/dispatch_dashboard/stops_today').once('value');
+                    const tomorrowSnap = await db.ref('developer/dispatch_dashboard/stops_tomorrow').once('value');
+                    const todayData = todaySnap.val() || {};
+                    const tomorrowData = tomorrowSnap.val() || {};
+
+                    // Separate completed from today
+                    const completed = {};
+                    const nonCompleted = {};
+                    Object.entries(todayData).forEach(([id, stop]) => {
+                        if (stop.status === 'completed') {
+                            completed[id] = stop;
+                        } else {
+                            nonCompleted[id] = stop;
+                        }
+                    });
+
+                    // Prepare updates object
+                    const updates = {};
+
+                    // Archive completed stops
+                    const archivePath = `stops_archive/${todayStr}`;
+                    Object.entries(completed).forEach(([id, stop]) => {
+                        const archivedStop = { ...stop, archivedAt: Date.now() };
+                        updates[`${archivePath}/${id}`] = archivedStop;
+                    });
+
+                    // Merge nonCompleted with tomorrowData to form new today
+                    const newToday = { ...nonCompleted, ...tomorrowData };
+                    updates['stops_today'] = newToday;
+                    updates['stops_tomorrow'] = {};
+
+                    // Perform atomic update
+                    await db.ref('developer/dispatch_dashboard').update(updates);
+
+                    // Update localStorage
+                    localStorage.setItem('lastDate', todayStr);
+                    console.log('✅ Rollover successful.');
+                    showNotification('✅ Daily rollover completed.');
+
+                    // Refresh manifest after rollover (listeners will update)
+                } catch (error) {
+                    console.error('❌ Rollover failed:', error);
+                    showNotification('⚠️ Rollover failed – please try again later.');
+                    // Do not update lastDate
+                }
+            } else {
+                console.log('ℹ️ No rollover needed. lastDate:', lastDate, 'today:', todayStr);
+            }
         }
 
         // Expose to global scope
@@ -4076,7 +4252,9 @@
         window.hideAddressOverlay = hideAddressOverlay;
         window.selectClient = selectClient;
         window.handleNameInput = handleNameInput;
-        window.rolloverDay = rolloverDay;
+        window.addGroupChatNumber = addGroupChatNumber;
+        window.removeGroupChatNumber = removeGroupChatNumber;
+        window.renderGroupChatChips = renderGroupChatChips;
     </script>
 </body>
 </html>
