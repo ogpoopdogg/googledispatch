@@ -2123,6 +2123,8 @@
         // This tracks whether we have already attempted to open Google Messages
         // during this dashboard session. It does NOT mean we still control the tab.
         let googleMessagesOpenedThisSession = false;
+        // Reference to the Google Messages window/tab we opened (if any)
+        let messagesWindow = null;
 
         // ===== SHORT CODE GENERATION =====
         function generateShortCode() {
@@ -2668,11 +2670,12 @@
             }
         }
 
-        // ===== NEW: Open Google Messages once per session =====
+        // ===== Google Messages tab handling =====
+
         function openGoogleMessagesOnce(phone) {
-            if (googleMessagesOpenedThisSession) {
-                return false;
-            }
+            // Attempts to open a new Google Messages tab.
+            // If successful, stores the window reference and sets the session flag.
+            // Returns true if opened, false otherwise.
             let formattedPhone = phone.trim();
             if (!formattedPhone.startsWith('+')) {
                 if (/^\d{10}$/.test(formattedPhone)) {
@@ -2681,39 +2684,31 @@
                     formattedPhone = '+' + formattedPhone;
                 }
             }
-            const composeUrl =
-                `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
+            const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
             const popup = window.open(composeUrl, 'EC_GoogleMessages');
             googleMessagesOpenedThisSession = true;
-            if (!popup) {
+            if (popup) {
+                messagesWindow = popup;
+                return true;
+            } else {
                 showNotification('Google Messages was blocked. Message copied — open manually and paste it.');
                 return false;
             }
-            return true;
         }
 
-        // ===== NEW: Manual Google Messages opener =====
         function openGoogleMessagesManually() {
             const popup = window.open('https://messages.google.com/web/', 'EC_GoogleMessages');
-            if (!popup) {
+            if (popup) {
+                messagesWindow = popup;
+                googleMessagesOpenedThisSession = true;
+                showNotification('Google Messages opened manually.');
+            } else {
                 showNotification('Google Messages was blocked. Please allow popups for this site.');
             }
         }
 
-        // ===== Helper: mark stop as dispatched in Firebase =====
-        function markStopDispatched(stopId) {
-            const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
-            ref.child(stopId).update({
-                isDispatched: true,
-                dispatchedAt: firebase.database.ServerValue.TIMESTAMP
-            }).catch(err => {
-                console.error('Failed to mark dispatched:', err);
-            });
-        }
-
-        // ===== REPLACED sendDispatchMessage (new simple implementation) =====
+        // ===== sendDispatchMessage (updated for tab reuse) =====
         function sendDispatchMessage(phone, message, stopId) {
-            // Format phone
             let formattedPhone = phone.trim();
             if (!formattedPhone.startsWith('+')) {
                 if (/^\d{10}$/.test(formattedPhone)) {
@@ -2725,34 +2720,70 @@
 
             const isMobile = /android/i.test(navigator.userAgent) || /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-            // --- Mobile: existing sms: behavior ---
             if (isMobile) {
                 const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
                 window.location.href = smsUrl;
-                // Copy as fallback
                 copyDispatchMessage(message).catch(() => {});
                 showNotification('📱 Opening SMS with message');
                 markStopDispatched(stopId);
                 return;
             }
 
-            // --- Desktop: copy first, then open Google Messages once if needed ---
+            // Desktop: copy message, then attempt to reuse existing Google Messages tab or open a new one.
+            const conversationUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
+
             copyDispatchMessage(message)
                 .then(() => {
-                    if (!googleMessagesOpenedThisSession) {
-                        openGoogleMessagesOnce(formattedPhone);
-                        showNotification('Google Messages opened. Message copied — paste and Send.');
-                    } else {
-                        showNotification('Message copied — paste it into Google Messages.');
+                    // Try to reuse existing tab
+                    let tabReused = false;
+                    if (messagesWindow && !messagesWindow.closed) {
+                        try {
+                            messagesWindow.location.href = conversationUrl;
+                            messagesWindow.focus();
+                            tabReused = true;
+                            showNotification('Google Messages tab focused and updated. Message copied — paste and Send.');
+                        } catch (e) {
+                            // Browser does not allow control; fall through
+                        }
+                    }
+                    if (!tabReused) {
+                        // No valid tab or cannot control; open a new one only if we haven't tried before.
+                        if (!googleMessagesOpenedThisSession) {
+                            const opened = openGoogleMessagesOnce(formattedPhone);
+                            if (opened) {
+                                showNotification('Google Messages opened. Message copied — paste and Send.');
+                            } else {
+                                showNotification('Message copied — please open Google Messages manually and paste.');
+                            }
+                        } else {
+                            showNotification('Message copied — paste it into Google Messages.');
+                        }
                     }
                 })
                 .catch(() => {
-                    // Clipboard failed — still try to open Google Messages once
-                    if (!googleMessagesOpenedThisSession) {
-                        openGoogleMessagesOnce(formattedPhone);
-                        showNotification('Google Messages opened. Please copy the message manually.');
-                    } else {
-                        showNotification('Please copy the message manually and paste it into Google Messages.');
+                    // Clipboard copy failed; still try to reuse/open tab, but notify user to copy manually.
+                    let tabReused = false;
+                    if (messagesWindow && !messagesWindow.closed) {
+                        try {
+                            messagesWindow.location.href = conversationUrl;
+                            messagesWindow.focus();
+                            tabReused = true;
+                            showNotification('Google Messages tab focused and updated. Please copy the message manually.');
+                        } catch (e) {
+                            // cannot control
+                        }
+                    }
+                    if (!tabReused) {
+                        if (!googleMessagesOpenedThisSession) {
+                            const opened = openGoogleMessagesOnce(formattedPhone);
+                            if (opened) {
+                                showNotification('Google Messages opened. Please copy the message manually.');
+                            } else {
+                                showNotification('Please copy the message manually and paste it into Google Messages.');
+                            }
+                        } else {
+                            showNotification('Please copy the message manually and paste it into Google Messages.');
+                        }
                     }
                 });
 
