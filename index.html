@@ -2597,7 +2597,7 @@
         }
 
         // ===== New function to send dispatch message =====
-    function sendDispatchMessage(phone, message, stopId) {
+   function sendDispatchMessage(phone, message, stopId) {
     // Validate and format phone
     let formattedPhone = phone.trim();
     if (!formattedPhone.startsWith('+')) {
@@ -2619,14 +2619,33 @@
     } else {
         const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
         
-        // Reuse the existing tab if it's still open
-        if (googleMessagesWindowRef && !googleMessagesWindowRef.closed) {
-            googleMessagesWindowRef.location.href = composeUrl;
-            googleMessagesWindowRef.focus();
+        // 1) Try to get the existing window by its name
+        let existingWin = window.open('', 'GoogleMessages');
+        if (existingWin && !existingWin.closed) {
+            // Reuse it
+            existingWin.location.href = composeUrl;
+            existingWin.focus();
+            // Update the stored reference
+            googleMessagesWindowRef = existingWin;
         } else {
-            googleMessagesWindowRef = window.open(composeUrl, 'GoogleMessagesTab');
+            // No existing window, open a new one
+            googleMessagesWindowRef = window.open(composeUrl, 'GoogleMessages');
+            if (!googleMessagesWindowRef) {
+                // Pop‑up blocked – fallback to clipboard
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(message).then(() => {
+                        showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
+                    }).catch(() => {
+                        showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
+                    });
+                } else {
+                    showNotification('⚠️ Please copy this message manually:\n' + message);
+                }
+                return; // exit early
+            }
         }
 
+        // Copy message to clipboard (as fallback)
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(message).then(() => {
                 showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
@@ -2647,7 +2666,6 @@
         console.error('Failed to mark dispatched:', err);
     });
 }
-
         // ===== Auto dispatch on add =====
         function autoDispatchStop(stopId, stopData) {
             const driverId = stopData.assignedDriver;
