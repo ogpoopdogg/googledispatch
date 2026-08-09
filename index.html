@@ -2537,6 +2537,7 @@
 
         // ===== DISPATCH MODAL FUNCTIONS =====
         let dispatchStopId = null;
+        let googleMessagesWindowRef = null;
 
         function openDispatchModal(stopId) {
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2596,48 +2597,56 @@
         }
 
         // ===== New function to send dispatch message =====
-        function sendDispatchMessage(phone, message, stopId) {
-            // Validate and format phone
-            let formattedPhone = phone.trim();
-            if (!formattedPhone.startsWith('+')) {
-                if (/^\d{10}$/.test(formattedPhone)) {
-                    formattedPhone = '+1' + formattedPhone;
-                } else {
-                    formattedPhone = '+' + formattedPhone;
-                }
-            }
-
-            const isAndroid = /android/i.test(navigator.userAgent);
-            if (isAndroid) {
-                const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
-                window.location.href = smsUrl;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(message).catch(() => {});
-                }
-                showNotification('📱 Google Messages opened – just tap Send!');
-            } else {
-                const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
-               window.open(composeUrl, 'GoogleMessagesTab');
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(message).then(() => {
-                        showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
-                    }).catch(() => {
-                        showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
-                    });
-                } else {
-                    showNotification('⚠️ Please copy this message manually:\n' + message);
-                }
-            }
-
-            // Mark as dispatched in Firebase
-            const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
-            ref.child(stopId).update({
-                isDispatched: true,
-                dispatchedAt: firebase.database.ServerValue.TIMESTAMP
-            }).catch(err => {
-                console.error('Failed to mark dispatched:', err);
-            });
+    function sendDispatchMessage(phone, message, stopId) {
+    // Validate and format phone
+    let formattedPhone = phone.trim();
+    if (!formattedPhone.startsWith('+')) {
+        if (/^\d{10}$/.test(formattedPhone)) {
+            formattedPhone = '+1' + formattedPhone;
+        } else {
+            formattedPhone = '+' + formattedPhone;
         }
+    }
+
+    const isAndroid = /android/i.test(navigator.userAgent);
+    if (isAndroid) {
+        const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
+        window.location.href = smsUrl;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(message).catch(() => {});
+        }
+        showNotification('📱 Google Messages opened – just tap Send!');
+    } else {
+        const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
+        
+        // Reuse the existing tab if it's still open
+        if (googleMessagesWindowRef && !googleMessagesWindowRef.closed) {
+            googleMessagesWindowRef.location.href = composeUrl;
+            googleMessagesWindowRef.focus();
+        } else {
+            googleMessagesWindowRef = window.open(composeUrl, 'GoogleMessagesTab');
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(message).then(() => {
+                showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
+            }).catch(() => {
+                showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
+            });
+        } else {
+            showNotification('⚠️ Please copy this message manually:\n' + message);
+        }
+    }
+
+    // Mark as dispatched in Firebase
+    const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
+    ref.child(stopId).update({
+        isDispatched: true,
+        dispatchedAt: firebase.database.ServerValue.TIMESTAMP
+    }).catch(err => {
+        console.error('Failed to mark dispatched:', err);
+    });
+}
 
         // ===== Auto dispatch on add =====
         function autoDispatchStop(stopId, stopData) {
