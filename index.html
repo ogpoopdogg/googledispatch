@@ -1827,6 +1827,58 @@
         body.light-mode .gm-btn:hover {
             background: #e5e7eb;
         }
+
+        /* Reset button style */
+        .btn-reset {
+            background: transparent;
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-left: 10px;
+        }
+        .btn-reset:hover {
+            background: #e74c3c;
+            color: #fff;
+        }
+        body.light-mode .btn-reset {
+            border-color: #e74c3c;
+            color: #e74c3c;
+        }
+        body.light-mode .btn-reset:hover {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        /* Stop name two lines */
+        .stop-item .info .name {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            line-height: 1.3;
+        }
+        .stop-item .info .name .pickup-line {
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .stop-item .info .name .delivery-line {
+            font-size: 11px;
+            opacity: 0.7;
+            font-weight: 400;
+        }
+        .stop-item .info .name .status-light {
+            margin-right: 4px;
+        }
+        .stop-item .info .name .ts-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 4px;
+        }
     </style>
 </head>
 <body>
@@ -1927,6 +1979,7 @@
                     </select>
                     <div id="driverPillsContainer"></div>
                     <button class="btn-add" onclick="addStop()">+ Add</button>
+                    <button class="btn-reset" onclick="resetForm()">Reset</button>
                 </div>
 
                 <div class="stop-list" id="stopList"></div>
@@ -2290,7 +2343,7 @@
                 }
                 const lowerVal = val.toLowerCase().trim();
                 const matches = Object.keys(addressLookupMap).filter(name =>
-                    name.toLowerCase().includes(lowerVal)
+                    name.toLowerCase().startsWith(lowerVal)
                 );
                 if (matches.length === 0) {
                     suggestionsBox.style.display = 'none';
@@ -2353,7 +2406,7 @@
             if (val.length < 1) { box.style.display = 'none'; return; }
             const lowerVal = val.toLowerCase().trim();
             const matches = Object.keys(addressLookupMap).filter(name =>
-                name.toLowerCase().includes(lowerVal)
+                name.toLowerCase().startsWith(lowerVal)
             );
             if (matches.length === 0) { box.style.display = 'none'; return; }
             const limited = matches.slice(0, 10);
@@ -3762,7 +3815,6 @@
                 // Determine display name: pickupName and deliveryName
                 const pickupName = s.pickupName || s.name || 'No pickup';
                 const deliveryName = s.deliveryName || '';
-                const displayName = pickupName + (deliveryName ? ' → ' + deliveryName : '');
 
                 let extraClasses = '';
                 let infoOnClick = `handleStopClick('${id}')`;
@@ -3817,19 +3869,29 @@
                     completedCheckHtml = `<span class="completed-check">✓</span>`;
                 }
 
+                // Build name lines: pickup first, then delivery
+                const nameHtml = `
+                    <div class="name">
+                        ${statusLightHtml}
+                        <span class="pickup-line">${pickupName}</span>
+                        ${deliveryName ? `<span class="delivery-line">→ ${deliveryName}</span>` : ''}
+                        <span class="ts-wrapper">${ts} ${completedCheckHtml}</span>
+                    </div>
+                `;
+
                 html += `
               <div class="stop-item ${isCompleted ? 'completed' : ''} ${isAssigned ? 'assigned' : ''} ${extraClasses}" 
                    data-id="${id}" 
                    style="border-left-color:${driverColor}; position:relative; ${bgColor ? 'background:'+bgColor+';' : ''}"
                    ${isCompleted ? '' : 'draggable="true"'}
                    data-stop-id="${id}"
-                   data-stop-name="${displayName}"
+                   data-stop-name="${pickupName}${deliveryName ? ' → ' + deliveryName : ''}"
                    data-stop-address="${s.address || ''}"
                    data-stop-city="${s.city || ''}"
                    data-stop-driver="${driverName}"
               >
                 <div class="info" onclick="${infoOnClick}" style="cursor:${infoCursor};">
-                  <div class="name">${statusLightHtml} ${displayName} ${ts} ${completedCheckHtml}</div>
+                  ${nameHtml}
                   <div class="addr">${s.address || ''} ${s.city || ''}</div>
                 </div>
                 <div class="actions">
@@ -3915,6 +3977,25 @@
             document.getElementById('manifestSearchClear').classList.remove('visible');
             searchQuery = '';
             renderStopList();
+        }
+
+        // ===== RESET FORM =====
+        function resetForm() {
+            document.getElementById('pickupName').value = '';
+            document.getElementById('pickupAddress').value = '';
+            document.getElementById('pickupCity').value = '';
+            document.getElementById('deliveryName').value = '';
+            document.getElementById('deliveryAddress').value = '';
+            document.getElementById('deliveryCity').value = '';
+            // Reset driver selection
+            if (dispatchActive) {
+                selectedDriverForPill = null;
+                renderDriverPills();
+            } else {
+                document.getElementById('stopDriver').value = '';
+            }
+            // Hide any suggestions
+            document.querySelectorAll('.suggestions-box').forEach(box => box.style.display = 'none');
         }
 
         // ===== COPY STOP NAMES (with mobile SMS support) =====
@@ -4431,6 +4512,7 @@
         window.addGroupChatNumber = addGroupChatNumber;
         window.removeGroupChatNumber = removeGroupChatNumber;
         window.openGoogleMessagesManually = openGoogleMessagesManually;
+        window.resetForm = resetForm;
     </script>
 </body>
 </html>
