@@ -1068,6 +1068,20 @@
             /* Mobile: hide header Dispatch, show mobile Dispatch */
             #dispatchBtn { display: none; }
             #dispatchBtnMobile { display: inline-block; }
+
+            /* Mobile layout for panel header: Map, Today Tmrw, Dispatch */
+            .panel-header > div {
+                justify-content: space-between;
+                width: 100%;
+            }
+            .panel-header > div .day-toggle {
+                flex: 1;
+                display: flex;
+                justify-content: center;
+            }
+            .panel-header > div .dispatch-btn {
+                margin-left: auto;
+            }
         }
         @media (min-width: 601px) {
             #dispatchBtnMobile { display: none; }
@@ -1665,9 +1679,13 @@
             user-select: none;
         }
         .driver-pill.selected {
+            transform: scale(1.2);
+            box-shadow: 0 0 24px var(--accent), 0 0 48px var(--accent);
             border-color: var(--accent);
-            box-shadow: 0 0 12px rgba(247, 201, 72, 0.5);
-            transform: scale(1.04);
+        }
+        #driverPillsContainer.has-selection .driver-pill:not(.selected) {
+            opacity: 0.4;
+            filter: grayscale(0.5);
         }
         .driver-pill:hover {
             transform: scale(1.04);
@@ -1679,7 +1697,11 @@
         }
         body.light-mode .driver-pill.selected {
             border-color: #2563eb;
-            box-shadow: 0 0 12px rgba(37, 99, 235, 0.5);
+            box-shadow: 0 0 24px #2563eb, 0 0 48px #2563eb;
+        }
+        body.light-mode #driverPillsContainer.has-selection .driver-pill:not(.selected) {
+            opacity: 0.4;
+            filter: grayscale(0.5);
         }
 
         /* Status lights */
@@ -1859,11 +1881,11 @@
                             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
                             Map
                         </button>
-                        <button class="dispatch-btn" id="dispatchBtnMobile" onclick="toggleDispatchMode()">Dispatch</button>
                         <div class="day-toggle">
                             <button class="active" data-day="today" onclick="switchDay('today')">Today</button>
-                            <button data-day="tomorrow" onclick="switchDay('tomorrow')">Tomorrow</button>
+                            <button data-day="tomorrow" onclick="switchDay('tomorrow')">Tmrw</button>
                         </div>
+                        <button class="dispatch-btn" id="dispatchBtnMobile" onclick="toggleDispatchMode()">Dispatch</button>
                     </div>
                 </div>
 
@@ -1873,12 +1895,33 @@
                 </div>
 
                 <div class="add-stop-area hidden">
-                    <div class="input-with-suggestions">
-                        <input type="text" id="stopName" placeholder="Contact/Business Name" autocomplete="off" oninput="handleNameInput(this.value)">
-                        <div id="nameSuggestions" class="suggestions-box"></div>
+                    <!-- Pickup section -->
+                    <div style="display:flex; align-items:center; gap:8px; width:100%; margin-bottom:4px;">
+                        <span style="background:var(--accent); color:#0b0b14; padding:2px 12px; border-radius:30px; font-weight:700; font-size:12px;">Pickup</span>
                     </div>
-                    <input type="text" id="stopAddress" placeholder="Address">
-                    <input type="text" id="stopCity" placeholder="City">
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; width:100%;">
+                        <div class="input-with-suggestions" style="flex:1 1 160px; min-width:120px;">
+                            <input type="text" id="pickupName" placeholder="Contact/Business Name" autocomplete="off" oninput="handleNameInput(this.value, 'pickupNameSuggestions')">
+                            <div id="pickupNameSuggestions" class="suggestions-box"></div>
+                        </div>
+                        <input type="text" id="pickupAddress" placeholder="Address" style="flex:1 1 160px; min-width:120px;">
+                        <input type="text" id="pickupCity" placeholder="City" style="flex:0 1 120px;">
+                    </div>
+
+                    <!-- Delivery section -->
+                    <div style="display:flex; align-items:center; gap:8px; width:100%; margin:8px 0 4px 0;">
+                        <span style="background:var(--accent); color:#0b0b14; padding:2px 12px; border-radius:30px; font-weight:700; font-size:12px;">Delivery</span>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; width:100%;">
+                        <div class="input-with-suggestions" style="flex:1 1 160px; min-width:120px;">
+                            <input type="text" id="deliveryName" placeholder="Contact/Business Name" autocomplete="off" oninput="handleNameInput(this.value, 'deliveryNameSuggestions')">
+                            <div id="deliveryNameSuggestions" class="suggestions-box"></div>
+                        </div>
+                        <input type="text" id="deliveryAddress" placeholder="Address" style="flex:1 1 160px; min-width:120px;">
+                        <input type="text" id="deliveryCity" placeholder="City" style="flex:0 1 120px;">
+                    </div>
+
+                    <!-- Driver selection -->
                     <select id="stopDriver" style="flex:0 0 auto; background:#0b0b14; border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:30px; font-size:14px; outline:none; min-width:100px;">
                         <option value="">Unassigned</option>
                     </select>
@@ -2226,8 +2269,10 @@
 
         // ===== BUSINESS AUTOCOMPLETE =====
         function initBusinessAutocomplete() {
-            const input = document.getElementById('stopName');
-            const suggestionsBox = document.getElementById('nameSuggestions');
+            const inputPickup = document.getElementById('pickupName');
+            const inputDelivery = document.getElementById('deliveryName');
+            const suggestionsPickup = document.getElementById('pickupNameSuggestions');
+            const suggestionsDelivery = document.getElementById('deliveryNameSuggestions');
 
             db.ref('address_lookup').on('value', snap => {
                 addressLookupData = snap.val() || {};
@@ -2238,7 +2283,7 @@
                 });
             });
 
-            function showSuggestions(val) {
+            function showSuggestions(input, suggestionsBox, val) {
                 if (!val || val.length < 1) {
                     suggestionsBox.style.display = 'none';
                     return;
@@ -2253,59 +2298,80 @@
                 }
                 const limited = matches.slice(0, 10);
                 suggestionsBox.innerHTML = limited.map(name =>
-                    `<div class="suggestion-item" data-name="${name.replace(/'/g, "\\'")}">${name}</div>`
+                    `<div class="suggestion-item" data-name="${name.replace(/'/g, "\\'")}" data-group="${input.id}">${name}</div>`
                 ).join('');
                 suggestionsBox.style.display = 'block';
             }
 
-            suggestionsBox.addEventListener('click', function(e) {
-                const target = e.target.closest('.suggestion-item');
-                if (!target) return;
-                const name = target.dataset.name;
-                if (name && addressLookupMap[name]) {
-                    document.getElementById('stopName').value = name;
-                    document.getElementById('stopAddress').value = addressLookupMap[name].address || '';
-                    document.getElementById('stopCity').value = addressLookupMap[name].city || '';
-                    suggestionsBox.style.display = 'none';
-                }
+            // Attach click to suggestions boxes
+            function attachSuggestionClick(suggestionsBox, inputNameId, addressId, cityId) {
+                suggestionsBox.addEventListener('click', function(e) {
+                    const target = e.target.closest('.suggestion-item');
+                    if (!target) return;
+                    const name = target.dataset.name;
+                    if (name && addressLookupMap[name]) {
+                        document.getElementById(inputNameId).value = name;
+                        document.getElementById(addressId).value = addressLookupMap[name].address || '';
+                        document.getElementById(cityId).value = addressLookupMap[name].city || '';
+                        suggestionsBox.style.display = 'none';
+                    }
+                });
+            }
+
+            attachSuggestionClick(suggestionsPickup, 'pickupName', 'pickupAddress', 'pickupCity');
+            attachSuggestionClick(suggestionsDelivery, 'deliveryName', 'deliveryAddress', 'deliveryCity');
+
+            // Input handlers
+            inputPickup.addEventListener('input', function() {
+                showSuggestions(this, suggestionsPickup, this.value);
+            });
+            inputDelivery.addEventListener('input', function() {
+                showSuggestions(this, suggestionsDelivery, this.value);
             });
 
-            input.addEventListener('blur', function() {
-                setTimeout(() => {
-                    suggestionsBox.style.display = 'none';
-                }, 200);
+            // Blur to hide suggestions
+            [inputPickup, inputDelivery].forEach(input => {
+                input.addEventListener('blur', function() {
+                    setTimeout(() => {
+                        const box = document.getElementById(this.id + 'Suggestions');
+                        if (box) box.style.display = 'none';
+                    }, 200);
+                });
             });
 
+            // Click outside to hide
             document.addEventListener('click', function(e) {
                 if (!e.target.closest('.input-with-suggestions')) {
-                    suggestionsBox.style.display = 'none';
+                    document.querySelectorAll('.suggestions-box').forEach(box => box.style.display = 'none');
                 }
             });
         }
 
-        function handleNameInput(val) {
-            showSuggestionsRoute(val, 'nameSuggestions', name =>
-                `<div class="suggestion-item" onclick="selectClient('${name.replace(/'/g, "\\'")}')">${name}</div>`
-                );
-        }
-
-        function showSuggestionsRoute(val, elementId, htmlCallback) {
-            const box = document.getElementById(elementId);
+        function handleNameInput(val, suggestionsId) {
+            const box = document.getElementById(suggestionsId);
+            if (!box) return;
             if (val.length < 1) { box.style.display = 'none'; return; }
-            const matches = Object.keys(addressLookupMap).filter(key => key.toLowerCase().startsWith(val.toLowerCase()
-                .trim()));
+            const lowerVal = val.toLowerCase().trim();
+            const matches = Object.keys(addressLookupMap).filter(name =>
+                name.toLowerCase().includes(lowerVal)
+            );
             if (matches.length === 0) { box.style.display = 'none'; return; }
-            box.innerHTML = matches.map(htmlCallback).join('');
+            const limited = matches.slice(0, 10);
+            box.innerHTML = limited.map(name =>
+                `<div class="suggestion-item" data-name="${name.replace(/'/g, "\\'")}" onclick="selectClient('${name.replace(/'/g, "\\'")}', '${suggestionsId}')">${name}</div>`
+            ).join('');
             box.style.display = 'block';
         }
 
-        function selectClient(name) {
+        function selectClient(name, suggestionsId) {
             const data = addressLookupMap[name];
             if (!data) return;
-            document.getElementById('stopName').value = name;
-            document.getElementById('stopAddress').value = data.address || '';
-            document.getElementById('stopCity').value = data.city || '';
-            document.getElementById('nameSuggestions').style.display = 'none';
+            // Determine which group: pickupNameSuggestions or deliveryNameSuggestions
+            const prefix = suggestionsId.includes('pickup') ? 'pickup' : 'delivery';
+            document.getElementById(prefix + 'Name').value = name;
+            document.getElementById(prefix + 'Address').value = data.address || '';
+            document.getElementById(prefix + 'City').value = data.city || '';
+            document.getElementById(suggestionsId).style.display = 'none';
         }
 
         // ===== UPDATE DRIVER SELECT =====
@@ -2612,7 +2678,9 @@
             phoneInput.value = driver.phone;
 
             const shortCode = stop.shortCode || '????';
-            const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
+            const pickupName = stop.pickupName || stop.name || 'No pickup';
+            const deliveryName = stop.deliveryName || 'No delivery';
+            const message = `Pickup: ${pickupName} for ${deliveryName} - Code: ${shortCode}`;
             document.getElementById('dispatchMessagePreview').textContent = message;
 
             document.getElementById('dispatchModal').style.display = 'flex';
@@ -2668,35 +2736,16 @@
             }
         }
 
-        // ===== NEW: Open Google Messages once per session =====
-        function openGoogleMessagesOnce(phone) {
-            if (googleMessagesOpenedThisSession) {
-                return false;
-            }
-            let formattedPhone = phone.trim();
-            if (!formattedPhone.startsWith('+')) {
-                if (/^\d{10}$/.test(formattedPhone)) {
-                    formattedPhone = '+1' + formattedPhone;
-                } else {
-                    formattedPhone = '+' + formattedPhone;
-                }
-            }
-            const composeUrl =
-                `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
-            const popup = window.open(composeUrl, 'EC_GoogleMessages');
-            googleMessagesOpenedThisSession = true;
-            if (!popup) {
-                showNotification('Google Messages was blocked. Message copied — open manually and paste it.');
-                return false;
-            }
-            return true;
-        }
-
-        // ===== NEW: Manual Google Messages opener =====
+        // ===== NEW: Open Google Messages manually =====
         function openGoogleMessagesManually() {
-            const popup = window.open('https://messages.google.com/web/', 'EC_GoogleMessages');
-            if (!popup) {
-                showNotification('Google Messages was blocked. Please allow popups for this site.');
+            const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+            if (isMobile) {
+                window.location.href = 'sms:';
+            } else {
+                const popup = window.open('https://messages.google.com/web/', 'EC_GoogleMessages');
+                if (!popup) {
+                    showNotification('Google Messages was blocked. Please allow popups for this site.');
+                }
             }
         }
 
@@ -2711,7 +2760,7 @@
             });
         }
 
-        // ===== REPLACED sendDispatchMessage (new simple implementation) =====
+        // ===== sendDispatchMessage (updated message) =====
         function sendDispatchMessage(phone, message, stopId) {
             // Format phone
             let formattedPhone = phone.trim();
@@ -2740,7 +2789,7 @@
             copyDispatchMessage(message)
                 .then(() => {
                     if (!googleMessagesOpenedThisSession) {
-                        openGoogleMessagesOnce(formattedPhone);
+                        openGoogleMessagesManually(); // but this now uses web on desktop
                         showNotification('Google Messages opened. Message copied — paste and Send.');
                     } else {
                         showNotification('Message copied — paste it into Google Messages.');
@@ -2749,7 +2798,7 @@
                 .catch(() => {
                     // Clipboard failed — still try to open Google Messages once
                     if (!googleMessagesOpenedThisSession) {
-                        openGoogleMessagesOnce(formattedPhone);
+                        openGoogleMessagesManually();
                         showNotification('Google Messages opened. Please copy the message manually.');
                     } else {
                         showNotification('Please copy the message manually and paste it into Google Messages.');
@@ -2769,7 +2818,9 @@
                 return;
             }
             const shortCode = stopData.shortCode || '????';
-            const message = `Pickup: ${stopData.name || 'Stop'} at ${stopData.address || ''}, ${stopData.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
+            const pickupName = stopData.pickupName || stopData.name || 'No pickup';
+            const deliveryName = stopData.deliveryName || 'No delivery';
+            const message = `Pickup: ${pickupName} for ${deliveryName} - Code: ${shortCode}`;
             sendDispatchMessage(driver.phone, message, stopId);
         }
 
@@ -2796,7 +2847,9 @@
             }
 
             const shortCode = stop.shortCode || '????';
-            const message = `Pickup: ${stop.name || 'Stop'} at ${stop.address || ''}, ${stop.city || ''}. Reply 👍 to confirm stop #${shortCode}.`;
+            const pickupName = stop.pickupName || stop.name || 'No pickup';
+            const deliveryName = stop.deliveryName || 'No delivery';
+            const message = `Pickup: ${pickupName} for ${deliveryName} - Code: ${shortCode}`;
 
             sendDispatchMessage(phone, message, dispatchStopId);
             closeDispatchModal();
@@ -2812,6 +2865,8 @@
                 container.innerHTML = '<span style="color:var(--muted); font-size:13px;">No drivers</span>';
                 return;
             }
+            // Remove any previous selection class
+            container.classList.remove('has-selection');
             entries.forEach(([id, drv]) => {
                 const pill = document.createElement('div');
                 pill.className = 'driver-pill';
@@ -2831,6 +2886,9 @@
                 });
                 container.appendChild(pill);
             });
+            if (selectedDriverForPill) {
+                container.classList.add('has-selection');
+            }
             // ensure container is visible if dispatch active
             if (dispatchActive) {
                 container.style.display = 'flex';
@@ -2982,7 +3040,7 @@
             renderDriverPills();
 
             setTimeout(() => {
-                const nameInput = document.getElementById('stopName');
+                const nameInput = document.getElementById('pickupName');
                 if (nameInput) {
                     nameInput.focus();
                     if ('ontouchstart' in window) {
@@ -3155,7 +3213,9 @@
 
             updateMapMarkers();
             try {
-                new google.maps.places.Autocomplete(document.getElementById('stopAddress'), { componentRestrictions: {
+                new google.maps.places.Autocomplete(document.getElementById('pickupAddress'), { componentRestrictions: {
+                        country: 'ca' } });
+                new google.maps.places.Autocomplete(document.getElementById('deliveryAddress'), { componentRestrictions: {
                         country: 'ca' } });
             } catch (e) {}
 
@@ -3629,10 +3689,11 @@
                 const ts = isCompleted ?
                     `<span class="timestamp">✓ ${s.completedAt ? new Date(s.completedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>` :
                     '';
+                const displayName = s.pickupName ? `${s.pickupName} → ${s.deliveryName || ''}` : (s.name || 'No name');
                 div.setAttribute('title', `${s.address || ''} ${s.city || ''}`.trim());
                 div.innerHTML = `
               <div class="info" onclick="zoomToStop('${id}')">
-                <div class="name">${s.name || 'No name'} ${ts}</div>
+                <div class="name">${displayName} ${ts}</div>
                 <div class="addr">${s.address || ''} ${s.city || ''}</div>
               </div>
               <div class="actions">
@@ -3654,7 +3715,7 @@
             const searchQueryLower = searchQuery.toLowerCase().trim();
             if (searchQueryLower) {
                 entries = entries.filter(([id, s]) => {
-                    const name = (s.name || '').toLowerCase();
+                    const name = (s.name || (s.pickupName ? s.pickupName + ' ' + s.deliveryName : '')).toLowerCase();
                     const address = (s.address || '').toLowerCase();
                     const city = (s.city || '').toLowerCase();
                     return name.includes(searchQueryLower) || address.includes(searchQueryLower) || city.includes(
@@ -3698,6 +3759,11 @@
                     '';
                 const fullAddr = getFullAddress(s);
 
+                // Determine display name: pickupName and deliveryName
+                const pickupName = s.pickupName || s.name || 'No pickup';
+                const deliveryName = s.deliveryName || '';
+                const displayName = pickupName + (deliveryName ? ' → ' + deliveryName : '');
+
                 let extraClasses = '';
                 let infoOnClick = `handleStopClick('${id}')`;
                 let infoCursor = 'pointer';
@@ -3719,7 +3785,7 @@
                     extraClasses += ' unassigned-border';
                 }
 
-                // Add dispatched class (will be used for background, but we remove badge)
+                // Add dispatched class
                 if (isDispatched && !isCompleted) {
                     extraClasses += ' dispatched';
                 }
@@ -3735,7 +3801,7 @@
 
                 const driverName = s.assignedDriver && drivers[s.assignedDriver] ? drivers[s.assignedDriver].name : '';
 
-                // Status light: green if dispatched, red if unassigned, nothing otherwise (assigned but not dispatched)
+                // Status light: green if dispatched, red if unassigned, nothing otherwise
                 let statusLightHtml = '';
                 if (!isCompleted) {
                     if (isDispatched) {
@@ -3745,7 +3811,7 @@
                     }
                 }
 
-                // Completed check: larger checkmark
+                // Completed check
                 let completedCheckHtml = '';
                 if (isCompleted) {
                     completedCheckHtml = `<span class="completed-check">✓</span>`;
@@ -3757,13 +3823,13 @@
                    style="border-left-color:${driverColor}; position:relative; ${bgColor ? 'background:'+bgColor+';' : ''}"
                    ${isCompleted ? '' : 'draggable="true"'}
                    data-stop-id="${id}"
-                   data-stop-name="${s.name || ''}"
+                   data-stop-name="${displayName}"
                    data-stop-address="${s.address || ''}"
                    data-stop-city="${s.city || ''}"
                    data-stop-driver="${driverName}"
               >
                 <div class="info" onclick="${infoOnClick}" style="cursor:${infoCursor};">
-                  <div class="name">${statusLightHtml} ${s.name || 'No name'} ${ts} ${completedCheckHtml}</div>
+                  <div class="name">${statusLightHtml} ${displayName} ${ts} ${completedCheckHtml}</div>
                   <div class="addr">${s.address || ''} ${s.city || ''}</div>
                 </div>
                 <div class="actions">
@@ -3872,24 +3938,25 @@
                     const dateHeader = `${weekday} ${month} ${day}${suffix}`;
 
                     // Get non-completed stops from today's view (stopsToday)
-                    const stopNames = Object.values(stopsToday)
-                        .filter(s => s.status !== 'completed' && s.name)
-                        .map(s => s.name.trim());
+                    const stopLines = Object.values(stopsToday)
+                        .filter(s => s.status !== 'completed' && s.pickupName)
+                        .map(s => {
+                            const pickup = s.pickupName || 'No pickup';
+                            const delivery = s.deliveryName || 'No delivery';
+                            const code = s.shortCode || '????';
+                            return `Pickup: ${pickup} for ${delivery} (Code: ${code})`;
+                        });
 
-                    const lines = [dateHeader, ...stopNames];
-                    const fullText = lines.join('\n');
+                    const fullText = [dateHeader, ...stopLines].join('\n');
 
                     if (isIOS) {
                         // iOS fallback: copy to clipboard
                         if (navigator.clipboard && navigator.clipboard.writeText) {
-                            navigator.clipboard.writeText(fullText).then(() => {
-                                showNotification('📋 Copied stop list – please paste into your group chat.');
-                            }).catch(() => {
-                                fallbackCopy(fullText);
-                            });
+                            navigator.clipboard.writeText(fullText).catch(() => {});
                         } else {
                             fallbackCopy(fullText);
                         }
+                        // On mobile, skip "copied" UI feedback
                         return;
                     } else {
                         // Android or other: open SMS with multiple recipients
@@ -3900,27 +3967,32 @@
                         if (navigator.clipboard && navigator.clipboard.writeText) {
                             navigator.clipboard.writeText(fullText).catch(() => {});
                         }
-                        showNotification('📱 Opening SMS with stop list');
                         return;
                     }
                 }
             }
 
-            // Fallback: original clipboard copy behavior
+            // Fallback: original clipboard copy behavior (desktop)
             const todayStops = stopsToday || {};
             const tomorrowStops = stopsTomorrow || {};
 
-            const names = [];
+            const lines = [];
 
             Object.values(todayStops).forEach(s => {
-                if (s.status !== 'completed' && s.name) {
-                    names.push(s.name.trim());
+                if (s.status !== 'completed' && s.pickupName) {
+                    const pickup = s.pickupName || 'No pickup';
+                    const delivery = s.deliveryName || 'No delivery';
+                    const code = s.shortCode || '????';
+                    lines.push(`Pickup: ${pickup} for ${delivery} (Code: ${code})`);
                 }
             });
 
             Object.values(tomorrowStops).forEach(s => {
-                if (s.status !== 'completed' && s.name) {
-                    names.push(s.name.trim());
+                if (s.status !== 'completed' && s.pickupName) {
+                    const pickup = s.pickupName || 'No pickup';
+                    const delivery = s.deliveryName || 'No delivery';
+                    const code = s.shortCode || '????';
+                    lines.push(`Pickup: ${pickup} for ${delivery} (Code: ${code})`);
                 }
             });
 
@@ -3935,35 +4007,38 @@
                              (day % 10 === 3 && day !== 13) ? 'rd' : 'th';
             const dateStr = `${weekday} ${month} ${day}${daySuffix}`;
 
-            const allLines = [dateStr, ...names];
+            const allLines = [dateStr, ...lines];
 
-            if (allLines.length === 1) { // only date, no names
-                const btn = document.querySelector('.copy-btn-header');
-                btn.textContent = 'COPY';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = 'COPY';
-                    btn.classList.remove('copied');
-                }, 1500);
+            if (allLines.length === 1) { // only date, no stops
                 return;
             }
 
             const text = allLines.join('\n');
 
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(() => {
-                    const btn = document.querySelector('.copy-btn-header');
-                    btn.textContent = '✅ Copied!';
-                    btn.classList.add('copied');
-                    setTimeout(() => {
-                        btn.textContent = 'COPY';
-                        btn.classList.remove('copied');
-                    }, 2000);
-                }).catch(() => {
+            // For desktop, we show copied feedback
+            if (!isMobile) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        const btn = document.querySelector('.copy-btn-header');
+                        btn.textContent = '✅ Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.textContent = 'COPY';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    }).catch(() => {
+                        fallbackCopy(text);
+                    });
+                } else {
                     fallbackCopy(text);
-                });
+                }
             } else {
-                fallbackCopy(text);
+                // Mobile: just copy silently
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).catch(() => {});
+                } else {
+                    fallbackCopy(text);
+                }
             }
         }
 
@@ -3978,23 +4053,28 @@
             try {
                 document.execCommand('copy');
                 const btn = document.querySelector('.copy-btn-header');
-                btn.textContent = '✅ Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = 'COPY';
-                    btn.classList.remove('copied');
-                }, 2000);
+                if (!window.innerWidth <= 600) { // skip UI feedback on mobile
+                    btn.textContent = '✅ Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.textContent = 'COPY';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }
             } catch (e) {
-                alert('Could not copy. Please select and copy manually:\n\n' + text);
+                // ignore on mobile
             }
             document.body.removeChild(textarea);
         }
 
         // ===== STOP ACTIONS =====
         async function addStop() {
-            const name = document.getElementById('stopName').value.trim();
-            const address = document.getElementById('stopAddress').value.trim();
-            const city = document.getElementById('stopCity').value.trim();
+            const pickupName = document.getElementById('pickupName').value.trim();
+            const pickupAddress = document.getElementById('pickupAddress').value.trim();
+            const pickupCity = document.getElementById('pickupCity').value.trim();
+            const deliveryName = document.getElementById('deliveryName').value.trim();
+            const deliveryAddress = document.getElementById('deliveryAddress').value.trim();
+            const deliveryCity = document.getElementById('deliveryCity').value.trim();
             // Use selected pill if dispatch active, else select value
             let assignedDriver = null;
             if (dispatchActive && selectedDriverForPill) {
@@ -4002,20 +4082,23 @@
             } else {
                 assignedDriver = document.getElementById('stopDriver').value || null;
             }
-            if (!name || !address || !city) { alert('Fill all fields'); return; }
+            if (!pickupName || !pickupAddress || !pickupCity) { alert('Fill all pickup fields'); return; }
             const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref(
                 'developer/dispatch_dashboard/stops_tomorrow');
             const geocoder = new google.maps.Geocoder();
-            const fullAddress = address + ', ' + city + ', Canada';
+            const fullAddress = pickupAddress + ', ' + pickupCity + ', Canada';
             geocoder.geocode({ address: fullAddress }, async function(results, status) {
                 if (status === 'OK' && results && results.length > 0) {
                     const lat = results[0].geometry.location.lat();
                     const lng = results[0].geometry.location.lng();
                     const shortCode = await getUniqueShortCode();
                     const stopData = {
-                        name,
-                        address,
-                        city,
+                        pickupName,
+                        pickupAddress,
+                        pickupCity,
+                        deliveryName,
+                        deliveryAddress,
+                        deliveryCity,
                         assignedDriver,
                         status: 'pending',
                         completedAt: null,
@@ -4024,29 +4107,38 @@
                         lng,
                         shortCode,
                         isDispatched: false,
-                        dispatchedAt: null
+                        dispatchedAt: null,
+                        // also keep legacy fields for compatibility
+                        name: pickupName,
+                        address: pickupAddress,
+                        city: pickupCity
                     };
                     ref.push(stopData).then((newRef) => {
                         const stopId = newRef.key;
                         // Auto-dispatch if assigned to a driver with a phone
                         autoDispatchStop(stopId, stopData);
-                        const sanitizedKey = name.replace(/[.#$\[\]\/]/g, "").trim();
+                        // Update address lookup with pickup name
+                        const sanitizedKey = pickupName.replace(/[.#$\[\]\/]/g, "").trim();
                         const updateObj = {
-                            address: address,
-                            city: city,
+                            address: pickupAddress,
+                            city: pickupCity,
                             last_edit_by: auth.currentUser ? auth.currentUser.email : 'unknown'
                         };
                         db.ref("address_lookup").child(sanitizedKey).update(updateObj);
                         updateMapMarkers();
-                        document.getElementById('stopName').value = '';
-                        document.getElementById('stopAddress').value = '';
-                        document.getElementById('stopCity').value = '';
+                        // Clear fields
+                        document.getElementById('pickupName').value = '';
+                        document.getElementById('pickupAddress').value = '';
+                        document.getElementById('pickupCity').value = '';
+                        document.getElementById('deliveryName').value = '';
+                        document.getElementById('deliveryAddress').value = '';
+                        document.getElementById('deliveryCity').value = '';
                         // Reset pill selection
                         selectedDriverForPill = null;
                         renderDriverPills();
                     });
                 } else {
-                    alert('Could not geocode address: ' + status);
+                    alert('Could not geocode pickup address: ' + status);
                 }
             });
         }
@@ -4079,10 +4171,6 @@
                     // Fetch updated stop data to auto-dispatch
                     if (driverId && drivers[driverId] && drivers[driverId].phone) {
                         const driver = drivers[driverId];
-                        const stopName = stop.name || 'Stop';
-                        const stopAddress = stop.address || '';
-                        const stopCity = stop.city || '';
-                        // Prepare updated stop data for autoDispatchStop
                         const updatedStopData = { ...stop, assignedDriver: driverId };
                         autoDispatchStop(id, updatedStopData);
                     }
