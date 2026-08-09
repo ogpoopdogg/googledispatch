@@ -2617,7 +2617,7 @@
                 showNotification('📱 Google Messages opened – just tap Send!');
             } else {
                 const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
-                chrome.runtime.sendMessage({ action: 'openGoogleMessages', url: composeUrl });
+               window.open(composeUrl, 'GoogleMessagesTab');
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(message).then(() => {
                         showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
