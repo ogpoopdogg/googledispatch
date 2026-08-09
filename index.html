@@ -2078,6 +2078,11 @@
         // Group chat numbers
         let groupChatNumbers = '';
 
+        // Google Messages single-window state
+        let googleMessagesWindowRef = null;
+        let googleMessagesWindowInvalid = false;
+        const GOOGLE_MESSAGES_WINDOW_NAME = 'EC_GoogleMessages';
+
         // ===== SHORT CODE GENERATION =====
         function generateShortCode() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -2537,7 +2542,6 @@
 
         // ===== DISPATCH MODAL FUNCTIONS =====
         let dispatchStopId = null;
-        let googleMessagesWindowRef = null;
 
         function openDispatchModal(stopId) {
             const allStops = currentDay === 'today' ? stopsToday : stopsTomorrow;
@@ -2596,76 +2600,275 @@
             }, 6000);
         }
 
-        // ===== New function to send dispatch message =====
-   function sendDispatchMessage(phone, message, stopId) {
-    // Validate and format phone
-    let formattedPhone = phone.trim();
-    if (!formattedPhone.startsWith('+')) {
-        if (/^\d{10}$/.test(formattedPhone)) {
-            formattedPhone = '+1' + formattedPhone;
-        } else {
-            formattedPhone = '+' + formattedPhone;
-        }
-    }
-
-    const isAndroid = /android/i.test(navigator.userAgent);
-    if (isAndroid) {
-        const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
-        window.location.href = smsUrl;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(message).catch(() => {});
-        }
-        showNotification('📱 Google Messages opened – just tap Send!');
-    } else {
-        const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
-        
-        // 1) Try to get the existing window by its name
-        let existingWin = window.open('', 'GoogleMessages');
-        if (existingWin && !existingWin.closed) {
-            // Reuse it
-            existingWin.location.href = composeUrl;
-            existingWin.focus();
-            // Update the stored reference
-            googleMessagesWindowRef = existingWin;
-        } else {
-            // No existing window, open a new one
-            googleMessagesWindowRef = window.open(composeUrl, 'GoogleMessages');
-            if (!googleMessagesWindowRef) {
-                // Pop‑up blocked – fallback to clipboard
+        // ===== Clipboard helper =====
+        function copyMessageToClipboard(message) {
+            return new Promise((resolve, reject) => {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(message).then(() => {
-                        showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
-                    }).catch(() => {
+                    navigator.clipboard.writeText(message).then(resolve).catch(reject);
+                } else {
+                    // fallback
+                    try {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = message;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        textarea.style.left = '-9999px';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                }
+            });
+        }
+
+        // ===== sendDispatchMessage (updated for single tab) =====
+        function sendDispatchMessage(phone, message, stopId) {
+            // Validate and format phone
+            let formattedPhone = phone.trim();
+            if (!formattedPhone.startsWith('+')) {
+                if (/^\d{10}$/.test(formattedPhone)) {
+                    formattedPhone = '+1' + formattedPhone;
+                } else {
+                    formattedPhone = '+' + formattedPhone;
+                }
+            }
+
+            const isAndroid = /android/i.test(navigator.userAgent);
+            if (isAndroid) {
+                const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
+                window.location.href = smsUrl;
+                copyMessageToClipboard(message).catch(() => {});
+                showNotification('📱 Google Messages opened – just tap Send!');
+            } else {
+                // Desktop: use named window for Google Messages
+                const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
+
+                // Helper to copy and notify with a specific message
+                function handleCopyAndNotify(notificationText) {
+                    copyMessageToClipboard(message)
+                        .then(() => {
+                            showNotification(notificationText || '📋 Message copied to clipboard.');
+                        })
+                        .catch(() => {
+                            showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
+                        });
+                }
+
+                // If we know the existing window is unusable, do not try to open a new tab
+                if (googleMessagesWindowInvalid) {
+                    handleCopyAndNotify('Message copied. Use your existing Google Messages tab and paste the message.');
+                    // Mark as dispatched and exit
+                    markStopDispatched(stopId);
+                    return;
+                }
+
+                let win = googleMessagesWindowRef;
+
+                // Check if we have a reference and it's still open
+                if (win && !win.closed) {
+                    try {
+                        // Attempt to navigate and focus the existing window
+                        win.location.href = composeUrl;
+                        win.focus();
+                        // Success – reuse
+                        googleMessagesWindowRef = win;
+                        googleMessagesWindowInvalid = false;
+                        handleCopyAndNotify('Google Messages opened. Message copied — paste and Send.');
+                        markStopDispatched(stopId);
+                        return;
+                    } catch (e) {
+                        // Cross-origin or security error – we cannot control the window
+                        // Invalidate the reference, do NOT open a new tab
+                        googleMessagesWindowRef = null;
+                        googleMessagesWindowInvalid = true;
+                        handleCopyAndNotify('Message copied. Use your existing Google Messages tab and paste the message.');
+                        markStopDispatched(stopId);
+                        return;
+                    }
+                } else {
+                    // No existing window, or it was closed – open a new one
+                    googleMessagesWindowInvalid = false;
+                    const newWin = window.open(composeUrl, GOOGLE_MESSAGES_WINDOW_NAME);
+                    if (newWin) {
+                        googleMessagesWindowRef = newWin;
+                        handleCopyAndNotify('Google Messages opened. Message copied — paste and Send.');
+                        markStopDispatched(stopId);
+                        return;
+                    } else {
+                        // Popup was blocked
+                        googleMessagesWindowRef = null;
+                        googleMessagesWindowInvalid = true;
+                        handleCopyAndNotify('Google Messages was blocked. Message copied — paste it into Google Messages.');
+                        markStopDispatched(stopId);
+                        return;
+                    }
+                }
+            }
+
+            // For Android, we still need to mark dispatched (done inside the if)
+            // For desktop, we call markStopDispatched inside each branch.
+            // However, we need to ensure that the stop is marked for Android as well.
+            // The code below will run for Android because we return early? Actually we don't return early for Android.
+            // We'll restructure to avoid duplication: we'll call markStopDispatched at the end, but for desktop we return early.
+            // But to keep it clean, we'll move the marking to a helper and call it from each branch.
+            // However, the original code had marking at the bottom. We'll keep that for Android and for desktop we'll call it manually.
+            // We'll refactor: define markStopDispatched and call it appropriately.
+
+            // Actually, we already call markStopDispatched inside desktop branches.
+            // For Android, we need to call it as well. We'll add a call after the Android block.
+            // But we also need to avoid double marking. We'll ensure we only call once.
+            // We'll use a flag or just call at the end if not already called.
+            // Let's add a variable to track if we marked.
+            // We'll redesign: define markStopDispatched, and call it from each branch, and also from the end if not yet called.
+
+            // To simplify, we'll move the marking to a separate function and call it at the end of the function, but we must ensure we don't call it if already called.
+            // We'll add a flag `marked = false` at start, set to true when we mark, and at the end if !marked, mark.
+            // Let's implement that.
+
+            // But we already have a lot of early returns. Let's just restructure the entire function to be clean.
+
+            // We'll rewrite the function entirely to use a consistent flow.
+
+            // Actually, to avoid breaking existing logic, we'll keep the Android branch as is and add a call to markStopDispatched inside it.
+            // For desktop, we already have markStopDispatched calls in each branch. We'll ensure we don't mark twice.
+            // We'll add a `markStopDispatched` helper and call it from the Android branch as well.
+            // Then we can remove the marking at the bottom to prevent double marking.
+
+            // But the existing code at the bottom marks the stop regardless. If we call it in desktop branches and also at the bottom, we would mark twice. So we need to remove the bottom marking and only call it from the branches.
+
+            // Let's do that: remove the bottom marking and add it in Android branch.
+
+            // We'll define a helper:
+            function markStopDispatched(stopId) {
+                const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
+                ref.child(stopId).update({
+                    isDispatched: true,
+                    dispatchedAt: firebase.database.ServerValue.TIMESTAMP
+                }).catch(err => {
+                    console.error('Failed to mark dispatched:', err);
+                });
+            }
+
+            // Then in the Android branch, call markStopDispatched(stopId);
+            // In desktop branches, call markStopDispatched(stopId);
+            // And remove the bottom marking.
+
+            // We'll rewrite sendDispatchMessage with this structure.
+            // But to minimize changes, we'll just replace the existing function with the new one that uses the helper.
+
+            // We'll also ensure that the function still works with the existing calls (autoDispatchStop, openMessagesAndDispatch).
+
+            // Let's produce the full updated function.
+        }
+
+        // We need to move the above function definition to replace the existing one.
+        // However, we are now inside the script, and we need to replace the existing function.
+        // Since we are editing the whole file, we can simply replace the function definition.
+        // We'll define the new function in place.
+
+        // Let's now write the final version of sendDispatchMessage.
+
+        // The new function:
+        function sendDispatchMessage(phone, message, stopId) {
+            // Validate and format phone
+            let formattedPhone = phone.trim();
+            if (!formattedPhone.startsWith('+')) {
+                if (/^\d{10}$/.test(formattedPhone)) {
+                    formattedPhone = '+1' + formattedPhone;
+                } else {
+                    formattedPhone = '+' + formattedPhone;
+                }
+            }
+
+            // Helper to mark dispatched
+            function markStopDispatched(stopId) {
+                const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
+                ref.child(stopId).update({
+                    isDispatched: true,
+                    dispatchedAt: firebase.database.ServerValue.TIMESTAMP
+                }).catch(err => {
+                    console.error('Failed to mark dispatched:', err);
+                });
+            }
+
+            const isAndroid = /android/i.test(navigator.userAgent);
+            if (isAndroid) {
+                const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(message)}`;
+                window.location.href = smsUrl;
+                copyMessageToClipboard(message).catch(() => {});
+                showNotification('📱 Google Messages opened – just tap Send!');
+                markStopDispatched(stopId);
+                return;
+            }
+
+            // Desktop: use named window for Google Messages
+            const composeUrl = `https://messages.google.com/web/conversations/new?phone=${encodeURIComponent(formattedPhone)}`;
+
+            // Helper to copy and notify with a specific message
+            function handleCopyAndNotify(notificationText) {
+                copyMessageToClipboard(message)
+                    .then(() => {
+                        showNotification(notificationText || '📋 Message copied to clipboard.');
+                    })
+                    .catch(() => {
                         showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
                     });
-                } else {
-                    showNotification('⚠️ Please copy this message manually:\n' + message);
+            }
+
+            // If we know the existing window is unusable, do not try to open a new tab
+            if (googleMessagesWindowInvalid) {
+                handleCopyAndNotify('Message copied. Use your existing Google Messages tab and paste the message.');
+                markStopDispatched(stopId);
+                return;
+            }
+
+            let win = googleMessagesWindowRef;
+
+            // Check if we have a reference and it's still open
+            if (win && !win.closed) {
+                try {
+                    // Attempt to navigate and focus the existing window
+                    win.location.href = composeUrl;
+                    win.focus();
+                    // Success – reuse
+                    googleMessagesWindowRef = win;
+                    googleMessagesWindowInvalid = false;
+                    handleCopyAndNotify('Google Messages opened. Message copied — paste and Send.');
+                    markStopDispatched(stopId);
+                    return;
+                } catch (e) {
+                    // Cross-origin or security error – we cannot control the window
+                    // Invalidate the reference, do NOT open a new tab
+                    googleMessagesWindowRef = null;
+                    googleMessagesWindowInvalid = true;
+                    handleCopyAndNotify('Message copied. Use your existing Google Messages tab and paste the message.');
+                    markStopDispatched(stopId);
+                    return;
                 }
-                return; // exit early
+            } else {
+                // No existing window, or it was closed – open a new one
+                googleMessagesWindowInvalid = false;
+                const newWin = window.open(composeUrl, GOOGLE_MESSAGES_WINDOW_NAME);
+                if (newWin) {
+                    googleMessagesWindowRef = newWin;
+                    handleCopyAndNotify('Google Messages opened. Message copied — paste and Send.');
+                    markStopDispatched(stopId);
+                    return;
+                } else {
+                    // Popup was blocked
+                    googleMessagesWindowRef = null;
+                    googleMessagesWindowInvalid = true;
+                    handleCopyAndNotify('Google Messages was blocked. Message copied — paste it into Google Messages.');
+                    markStopDispatched(stopId);
+                    return;
+                }
             }
         }
 
-        // Copy message to clipboard (as fallback)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(message).then(() => {
-                showNotification('📋 Message copied to clipboard. Paste it in the conversation.');
-            }).catch(() => {
-                showNotification('⚠️ Could not copy automatically. Please copy this message manually:\n' + message);
-            });
-        } else {
-            showNotification('⚠️ Please copy this message manually:\n' + message);
-        }
-    }
-
-    // Mark as dispatched in Firebase
-    const ref = currentDay === 'today' ? db.ref('developer/dispatch_dashboard/stops_today') : db.ref('developer/dispatch_dashboard/stops_tomorrow');
-    ref.child(stopId).update({
-        isDispatched: true,
-        dispatchedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(err => {
-        console.error('Failed to mark dispatched:', err);
-    });
-}
         // ===== Auto dispatch on add =====
         function autoDispatchStop(stopId, stopData) {
             const driverId = stopData.assignedDriver;
